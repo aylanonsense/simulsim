@@ -1,2 +1,2 @@
 # simulsim
-Get outta here Jason!
+Another attempt at a multiplayer framework.
