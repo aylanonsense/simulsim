@@ -2,36 +2,25 @@ local transportLayers = {}
 
 local TransportLayer = {}
 function TransportLayer:new(params)
-  params = params or {}
-
-  -- Config params
-  local latency = params.latency or 0 -- ms
-  local latencyDeviation = params.latencyDeviation or 0 -- ms
-  local packetLossChance = params.packetLossChance or 0
-
-  -- Private vars
-  local packets = {}
-  local receiveCallbacks = {}
-
-  -- Private API
-  local receive = function(self, msg, unlosable)
-    if unlosable or math.random() >= packetLossChance then
-      for _, callback in ipairs(receiveCallbacks) do
-        callback(msg)
-      end
-    end
-  end
-
-  -- Public API
   local transportLayer = {
+    -- Private config vars
+    _latency = params and params.latency or 0,
+    _latencyDeviation = params and params.latencyDeviation or 0,
+    _packetLossChance = params and params.packetLossChance or 0,
+
+    -- Private vars
+    _packets = {},
+    _receiveCallbacks = {},
+
+    -- Public methods
     send = function(self, msg, unlosable)
-      local timeUntilReceive = (latency - latencyDeviation + 2 * latencyDeviation * math.random()) / 1000
+      local timeUntilReceive = (self._latency + self._latencyDeviation * (2 * math.random() - 1)) / 1000
       -- Receive the message immediately
       if timeUntilReceive <= 0 then
-        receive(self, msg, unlosable)
+        self:_handleReceive(msg, unlosable)
       -- Or schedule it to be received later
       else
-        table.insert(packets, {
+        table.insert(self._packets, {
           message = msg,
           timeUntilReceive = timeUntilReceive,
           unlosable = unlosable or false
@@ -41,20 +30,31 @@ function TransportLayer:new(params)
     update = function(self, dt)
       -- Figure out which messages are ready to be received
       local packetsToSend = {}
-      for i = #packets, 1, -1 do
-        packets[i].timeUntilReceive = packets[i].timeUntilReceive - dt
-        if packets[i].timeUntilReceive < 0 then
-          table.insert(packetsToSend, packets[i])
-          table.remove(packets, i)
+      for i = #self._packets, 1, -1 do
+        self._packets[i].timeUntilReceive = self._packets[i].timeUntilReceive - dt
+        if self._packets[i].timeUntilReceive < 0 then
+          table.insert(packetsToSend, self._packets[i])
+          table.remove(self._packets, i)
         end
       end
       -- Receive those messages
       for i = #packetsToSend, 1, -1 do
-        receive(self, packetsToSend[i].message, packetsToSend[i].unlosable)
+        self:_handleReceive(packetsToSend[i].message, packetsToSend[i].unlosable)
       end
     end,
+
+    -- Private methods
+    _handleReceive = function(self, msg, unlosable)
+      if unlosable or math.random() >= self._packetLossChance then
+        for _, callback in ipairs(self._receiveCallbacks) do
+          callback(msg)
+        end
+      end
+    end,
+
+    -- Callback methods
     onReceive = function(self, callback)
-      table.insert(receiveCallbacks, callback)
+      table.insert(self._receiveCallbacks, callback)
     end
   }
 
