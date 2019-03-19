@@ -14,7 +14,7 @@ To run the tests:
 
     busted ./tests
 
-To get a code coverage report:
+To get a code coverage report (after running the tests above):
 
     luacov && luacov-console && luacov-console -s
 
