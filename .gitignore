@@ -1,0 +1,5 @@
+# Silly Mac files
+.DS_Store
+
+# Code coverage files
+luacov.*

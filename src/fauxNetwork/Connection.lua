@@ -1,5 +1,5 @@
 -- Load dependencies
-local TransportLayer = require 'src/singlePlayer/TransportLayer'
+local TransportLayer = require 'src/fauxNetwork/TransportLayer'
 
 local Connection = {}
 function Connection:new(params)

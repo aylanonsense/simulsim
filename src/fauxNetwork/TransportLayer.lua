@@ -72,4 +72,9 @@ function TransportLayer:updateAll(dt)
   end
 end
 
+-- Clears out the array of tranport layers being tracked
+function TransportLayer:removeAll()
+  transportLayers = {}
+end
+
 return TransportLayer
