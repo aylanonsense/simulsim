@@ -202,4 +202,112 @@ describe('faux network', function()
       assert.is.equal('test message from client', messageReceived)
     end)
   end)
+  describe('with unreliability', function()
+    it('the server has a chance of never receiving packets that are sent to it', function()
+      local server, clients = createFauxNetwork({ packetLossChance = 0.5 })
+      local numMessagesReceived = 0
+      server:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+      server:startListening()
+      clients[1]:connect()
+      for i = 1, 100 do
+        clients[1]:send('test message from client')
+      end
+      assert.True(25 < numMessagesReceived and numMessagesReceived < 75)
+    end)
+    it('the client has a chance of never receiving packets that are sent to it', function()
+      local server, clients = createFauxNetwork({ packetLossChance = 0.5 })
+      local numMessagesReceived = 0
+      clients[1]:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+      server:startListening()
+      clients[1]:connect()
+      for i = 1, 100 do
+        server:sendAll('test message from server')
+      end
+      assert.True(25 < numMessagesReceived and numMessagesReceived < 75)
+    end)
+    describe('with latency', function()
+      it('the server has a chance of never receiving packets that are sent to it', function()
+        local server, clients = createFauxNetwork({ packetLossChance = 0.5, latency = 100 })
+        local numMessagesReceived = 0
+        server:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+        server:startListening()
+        clients[1]:connect()
+        progressTime(0.305)
+        for i = 1, 100 do
+          progressTime(0.105)
+          clients[1]:send('test message from client')
+        end
+        progressTime(1.000)
+        assert.True(25 < numMessagesReceived and numMessagesReceived < 75)
+      end)
+      it('the client has a chance of never receiving packets that are sent to it', function()
+        local server, clients = createFauxNetwork({ packetLossChance = 0.5, latency = 100 })
+        local numMessagesReceived = 0
+        clients[1]:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+        server:startListening()
+        clients[1]:connect()
+        progressTime(0.305)
+        for i = 1, 100 do
+          progressTime(0.105)
+          server:sendAll('test message from server')
+        end
+        progressTime(1.000)
+        assert.True(25 < numMessagesReceived and numMessagesReceived < 75)
+      end)
+    end)
+  end)
+  describe('without any unreliability', function()
+    it('the server receives every packet sent to it', function()
+      local server, clients = createFauxNetwork()
+      local numMessagesReceived = 0
+      server:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+      server:startListening()
+      clients[1]:connect()
+      for i = 1, 100 do
+        clients[1]:send('test message from client')
+      end
+      assert.is.equal(numMessagesReceived, 100)
+    end)
+    it('the client receives every packet sent to it', function()
+      local server, clients = createFauxNetwork()
+      local numMessagesReceived = 0
+      clients[1]:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+      server:startListening()
+      clients[1]:connect()
+      for i = 1, 100 do
+        server:sendAll('test message from server')
+      end
+      assert.is.equal(numMessagesReceived, 100)
+    end)
+    describe('with latency', function()
+      it('the server receives every packet sent to it', function()
+        local server, clients = createFauxNetwork({ latency = 100 })
+        local numMessagesReceived = 0
+        server:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+        server:startListening()
+        clients[1]:connect()
+        progressTime(0.305)
+        for i = 1, 100 do
+          progressTime(0.105)
+          clients[1]:send('test message from client')
+        end
+        progressTime(1.000)
+        assert.is.equal(numMessagesReceived, 100)
+      end)
+      it('the client receives every packet sent to it', function()
+        local server, clients = createFauxNetwork({ latency = 100 })
+        local numMessagesReceived = 0
+        clients[1]:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+        server:startListening()
+        clients[1]:connect()
+        progressTime(0.305)
+        for i = 1, 100 do
+          progressTime(0.105)
+          server:sendAll('test message from server')
+        end
+        progressTime(1.000)
+        assert.is.equal(numMessagesReceived, 100)
+      end)
+    end)
+  end)
 end)
