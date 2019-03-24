@@ -8,11 +8,9 @@ function Simulation:new(params)
     -- Public vars
     time = 0.00,
     frame = 0,
+    nextEntityId = 1,
     data = {},
     entities = {},
-
-    -- Private vars
-    _nextEntityId = 1,
 
     -- Public methods
     -- Gets the current state of the simulation as a simple table
@@ -20,11 +18,12 @@ function Simulation:new(params)
       local state = {
         time = self.time,
         frame = self.frame,
-        data = self.data,
+        nextEntityId = self.nextEntityId,
+        data = tableHelpers.cloneTable(self.data),
         entities = {}
       }
       for _, entity in ipairs(self.entities) do
-        table.insert(self.entities, self:_getStateFromEntity(entity))
+        table.insert(state.entities, tableHelpers.cloneTable(self:_getStateFromEntity(entity)))
       end
       return state
     end,
@@ -32,7 +31,8 @@ function Simulation:new(params)
     setState = function(self, state)
       self.time = state.time
       self.frame = state.frame
-      self.data = cloneTable(state.data)
+      self.nextEntityId = state.nextEntityId
+      self.data = tableHelpers.cloneTable(state.data)
       self.entities = {}
       for _, entityState in ipairs(state.entities) do
         table.insert(self.entities, self:_createEntityFromState(tableHelpers.cloneTable(entityState)))
@@ -48,8 +48,7 @@ function Simulation:new(params)
           clonedSim[k] = v
         end
       end
-      -- Set the new simuation's vars and state
-      clonedSim._nextEntityId = self._nextEntityId
+      -- Set the new simuation's state
       clonedSim:setState(self:getState())
       -- Return the newly-cloned simulation
       return clonedSim
@@ -84,8 +83,8 @@ function Simulation:new(params)
     -- Private methods
     -- Generates a new entity id
     _generateEntityId = function(self)
-      local entityId = self._nextEntityId
-      self._nextEntityId = self._nextEntityId + 1
+      local entityId = self.nextEntityId
+      self.nextEntityId = self.nextEntityId + 1
       return entityId
     end,
     -- Gets the unique id from a fully-hydrated entity object
@@ -106,7 +105,7 @@ function Simulation:new(params)
     end,
 
     -- Methods to override
-    update = function(self, dt, inputs, events) end
+    update = function(self, dt, inputs, events, isTopFrame) end
   }
 
   -- Set the simulation's initial state
