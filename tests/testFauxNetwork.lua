@@ -2,10 +2,10 @@
 local TransportLayer = require 'src/fauxNetwork/TransportLayer'
 local createFauxNetwork = require 'src/fauxNetwork/createFauxNetwork'
 
--- Helper function that pretends time has passed (by updating 100 times per second)
+-- Helper function that pretends time has passed (by updating 60 times per second)
 function progressTime(seconds)
-  for i = 1, 100 * seconds do
-    TransportLayer:updateAll(1 / 100)
+  for i = 1, 60 * seconds do
+    TransportLayer:updateAll(1 / 60)
   end
 end
 

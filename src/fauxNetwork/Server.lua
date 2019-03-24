@@ -1,82 +1,11 @@
--- A client for the server to use
 local Client = {}
-function Client:new(clientId, conn)
-  local client = {
-    -- Public vars
-    clientId = clientId,
+function Client:new(params)
+  local clientId = params and params.clientId
+  local conn = params and params.conn
 
-    -- Private vars
-    _conn = conn,
-    _isConnected = true,
-    _disconnectCallbacks = {},
-    _receiveCallbacks = {},
-
-    -- Public methods
-    isConnected = function(self)
-      return self._isConnected
-    end,
-    -- Forcefully disconnects the client from the server
-    disconnect = function(self, reason)
-      if self._isConnected then
-        self._isConnected = false
-        self._conn:disconnect()
-        for _, callback in ipairs(self._disconnectCallbacks) do
-          callback(reason or 'Server forced disconnect')
-        end
-      end
-    end,
-    buffer = function(self, msg)
-      if self._isConnected then
-        self._conn:buffer(msg)
-      end
-    end,
-    flush = function(self)
-      if self._isConnected then
-        self._conn:flush()
-      end
-    end,
-    send = function(self, msg)
-      if self._isConnected then
-        self._conn:send(msg)
-      end
-    end,
-
-    -- Private methods
-    _handleDisconnect = function(self, reason)
-      if self._isConnected then
-        self._isConnected = false
-        for _, callback in ipairs(self._disconnectCallbacks) do
-          callback(reason or 'Client disconnected')
-        end
-      end
-    end,
-    _handleReceive = function(self, msg)
-      if self._isConnected then
-        for _, callback in ipairs(self._receiveCallbacks) do
-          callback(msg)
-        end
-      end
-    end,
-
-    -- Callback methods
-    onDisconnect = function(self, callback)
-      table.insert(self._disconnectCallbacks, callback)
-    end,
-    onReceive = function(self, callback)
-      table.insert(self._receiveCallbacks, callback)
-    end
-  }
-
-  -- Bind events
-  conn:onDisconnect(function(reason)
-    client:_handleDisconnect(reason)
-  end)
-  conn:onReceive(function(msg)
-    client:_handleReceive(msg)
-  end)
-
-  -- Return the new client
-  return client
+  -- Just add a clientId onto the connection and call it a "client"
+  conn.clientId = clientId
+  return conn
 end
 
 -- The server, which manages connected clients
@@ -192,7 +121,10 @@ function Server:new()
         -- Create a new client
         local clientId = self._nextClientId
         self._nextClientId = self._nextClientId + 1
-        local client = Client:new(clientId, conn)
+        local client = Client:new({
+          clientId = clientId,
+          conn = conn
+        })
         -- Add the new client to the server
         table.insert(self._clients, client)
         -- Bind events

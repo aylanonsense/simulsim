@@ -2,6 +2,7 @@
 local TransportLayer = require 'src/fauxNetwork/TransportLayer'
 local Connection = require 'src/fauxNetwork/Connection'
 local Server = require 'src/fauxNetwork/Server'
+local Client = require 'src/fauxNetwork/Client'
 
 -- Creates a fake, in-memory network of clients and servers
 return function(params)
@@ -33,13 +34,16 @@ return function(params)
     end)
 
     -- Create the client connection
-    table.insert(clients, Connection:new({
+    local clientConn = Connection:new({
       isClient = true,
       sendTransportLayer = clientToServer,
       receiveTransportLayer = serverToClient
+    })
+    table.insert(clients, Client:new({
+      conn = clientConn
     }))
   end
 
-  -- Return them
+  -- Return them both
   return server, clients
 end

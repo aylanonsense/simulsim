@@ -3,11 +3,15 @@ local TransportLayer = require 'src/fauxNetwork/TransportLayer'
 
 local Connection = {}
 function Connection:new(params)
+  local isClient = params and params.isClient or false
+  local sendTransportLayer = params and params.sendTransportLayer
+  local receiveTransportLayer = params and params.receiveTransportLayer
+
   local conn = {
     -- Private config vars
-    _isClient = params and params.isClient or false,
-    _sendTransportLayer = params and params.sendTransportLayer,
-    _receiveTransportLayer = params and params.receiveTransportLayer,
+    _isClient = isClient,
+    _sendTransportLayer = sendTransportLayer,
+    _receiveTransportLayer = receiveTransportLayer,
 
     -- Private vars
     _status = 'disconnected',
@@ -46,13 +50,6 @@ function Connection:new(params)
     isConnected = function(self)
       return self._status == 'connected'
     end,
-    -- Sends a message immediately (alongside all buffered messages)
-    send = function(self, msg)
-      if self:isConnected() then
-        self:buffer(msg)
-        self:flush()
-      end
-    end,
     -- Buffers a message to be sent the next time flush is called
     buffer = function(self, msg)
       if self:isConnected() then
@@ -75,6 +72,13 @@ function Connection:new(params)
             callback(msg)
           end
         end
+      end
+    end,
+    -- Sends a message immediately (alongside all buffered messages)
+    send = function(self, msg)
+      if self:isConnected() then
+        self:buffer(msg)
+        self:flush()
       end
     end,
 
