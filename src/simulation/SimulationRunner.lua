@@ -20,20 +20,36 @@ function SimulationRunner:new(params)
     end,
     -- Adds an event to be applied on the given frame, which may trigger a rewind
     applyEvent = function(self, event)
-      local currFrame = self._simulation.frame
       table.insert(self._eventHistory, event)
       -- If the event occurred too far in the past, there's not much we can do about it
-      if event.frame < currFrame - self._framesOfHistory then
+      if event.frame < self._simulation.frame - self._framesOfHistory then
         return false
       -- If the event takes place in the past, regenerate the state history
-      elseif event.frame <= currFrame then
+      elseif event.frame <= self._simulation.frame then
         if not self:_regenerateStateHistoryOnOrAfterFrame(event.frame) then
           return false
         end
       end
       return true
     end,
-    -- Sets the current state of the simulation, removing all past hitory in the process
+    -- Cancels an event that was applied prior
+    unapplyEvent = function(self, eventId)
+      -- Search for the event
+      for i = #self._eventHistory, 1, -1 do
+        local event = self._eventHistory[i]
+        if event.eventId == eventId then
+          -- Remove the event
+          table.remove(self._eventHistory, i)
+          -- Regenerate state history if the event was applied in the past
+          if event.frame <= self._simulation.frame then
+            self:_regenerateStateHistoryOnOrAfterFrame(event.frame)
+          end
+          return true
+        end
+      end
+      return false
+    end,
+    -- Sets the current state of the simulation, removing all past history in the process
     setState = function(self, state)
       -- Set the simulation's state
       self._simulation:setState(state)
@@ -112,11 +128,20 @@ function SimulationRunner:new(params)
       -- Advance the simulation's time
       self._simulation.frame = self._simulation.frame + 1
       self._simulation.time = self._simulation.time + dt
-      -- Look up the inputs and events that take place on this frame
-      local inputs = {}
+      -- Get the events that take place on this frame
       local events = self:_getEventsAtFrame(self._simulation.frame)
+      -- Input-related events are automatically applied to the simulation's inputs
+      local nonInputEvents = {}
+      for _, event in ipairs(events) do
+        if event.isInputEvent and event.type == 'set-inputs' then
+          self._simulation.inputs[event.clientId] = event.inputs
+        else
+          table.insert(nonInputEvents, event)
+          self._simulation:handleEvent(event.type, event.data)
+        end
+      end
       -- Update the simulation
-      self._simulation:update(dt, {}, events, isTopFrame)
+      self._simulation:update(dt, self._simulation.inputs, nonInputEvents, isTopFrame)
       -- Generate a snapshot of the state every so often
       if shouldGenerateStateSnapshots and self._simulation.frame % self._framesBetweenStateSnapshots == 0 then
         self:_generateStateSnapshot()

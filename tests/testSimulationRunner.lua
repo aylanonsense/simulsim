@@ -33,6 +33,7 @@ describe('simulation runner', function()
       time = 0.00,
       frame = 0,
       nextEntityId = 1,
+      inputs = {},
       data = {
         fruits = { 'apple' }
       },
@@ -56,6 +57,7 @@ describe('simulation runner', function()
         time = 1.50,
         frame = 90,
         nextEntityId = 1,
+        inputs = {},
         data = {
           fruits = { 'cranberry' }
         },
@@ -76,6 +78,7 @@ describe('simulation runner', function()
         time = 1.00,
         frame = 60,
         nextEntityId = 1,
+        inputs = {},
         data = {
           fruits = { 'cranberry' }
         },
@@ -93,6 +96,7 @@ describe('simulation runner', function()
         time = 1.00,
         frame = 60,
         nextEntityId = 1,
+        inputs = {},
         data = {
           fruits = { 'cranberry' }
         },
@@ -107,6 +111,7 @@ describe('simulation runner', function()
         time = 1.00,
         frame = 60,
         nextEntityId = 1,
+        inputs = {},
         data = {
           fruits = { 'cranberry' }
         },
@@ -169,6 +174,97 @@ describe('simulation runner', function()
         type = 'add-fruit',
         fruit = 'blueberry'
       }))
+    end)
+    it('calls the simulation\'s handleEvent() method for each applied event', function()
+      spy.on(sim, "handleEvent")
+      runner:applyEvent({
+        frame = 65,
+        type = 'add-fruit',
+        fruit = 'blueberry'
+      })
+      progressFrames(5)
+      assert.spy(sim.handleEvent).was.called(1)
+    end)
+    it('does not call the simulation\'s handleEvent() method for input events', function()
+      spy.on(sim, "handleEvent")
+      runner:applyEvent({
+        frame = 65,
+        isInputEvent = true,
+        type = 'set-inputs',
+        clientId = 2,
+        inputs = {
+          left = true,
+          right = false
+        }
+      })
+      progressFrames(5)
+      assert.spy(sim.handleEvent).was.called(0)
+    end)
+    it('does not include input events in the list of events passed to the simulation\'s update() method', function()
+      runner:applyEvent({
+        frame = 65,
+        isInputEvent = true,
+        type = 'set-inputs',
+        clientId = 2,
+        inputs = {
+          left = true,
+          right = false
+        }
+      })
+      assert.is.same({}, sim.inputs)
+      progressFrames(5)
+      assert.is.same({ [2] = { left = true, right = false } }, sim.inputs)
+    end)
+    it('applies set-input events to the simulation\'s input data', function()
+      runner:applyEvent({
+        frame = 65,
+        isInputEvent = true,
+        type = 'set-inputs',
+        clientId = 2,
+        inputs = {
+          left = true,
+          right = false
+        }
+      })
+      assert.is.same({}, sim.inputs)
+      progressFrames(5)
+      assert.is.same({ [2] = { left = true, right = false } }, sim.inputs)
+    end)
+  end)
+  describe('unapplyEvent()', function()
+    it('returns true if the event could be unapplied', function()
+      runner:applyEvent({
+        eventId = 'some-event-id',
+        frame = 40,
+        type = 'add-fruit',
+        fruit = 'orange'
+      })
+      assert.True(runner:unapplyEvent('some-event-id'))
+    end)
+    it('returns false if the event could not be unapplied', function()
+      runner:applyEvent({
+        eventId = 'some-event-id',
+        frame = 40,
+        type = 'add-fruit',
+        fruit = 'orange'
+      })
+      assert.False(runner:unapplyEvent('some-event-id-2'))
+    end)
+    it('undoes the effects of an event', function()
+      runner:applyEvent({
+        eventId = 'some-event-id',
+        frame = 40,
+        type = 'add-fruit',
+        fruit = 'orange'
+      })
+      runner:applyEvent({
+        frame = 45,
+        type = 'add-fruit',
+        fruit = 'banana'
+      })
+      assert.is.same({ 'apple', 'orange', 'banana' }, sim.data.fruits)
+      runner:unapplyEvent('some-event-id')
+      assert.is.same({ 'apple', 'banana' }, sim.data.fruits)
     end)
   end)
 end)

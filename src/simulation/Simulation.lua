@@ -9,6 +9,7 @@ function Simulation:new(params)
     time = 0.00,
     frame = 0,
     nextEntityId = 1,
+    inputs = {},
     data = {},
     entities = {},
 
@@ -19,6 +20,7 @@ function Simulation:new(params)
         time = self.time,
         frame = self.frame,
         nextEntityId = self.nextEntityId,
+        inputs = tableHelpers.cloneTable(self.inputs),
         data = tableHelpers.cloneTable(self.data),
         entities = {}
       }
@@ -32,6 +34,7 @@ function Simulation:new(params)
       self.time = state.time
       self.frame = state.frame
       self.nextEntityId = state.nextEntityId
+      self.inputs = tableHelpers.cloneTable(state.inputs)
       self.data = tableHelpers.cloneTable(state.data)
       self.entities = {}
       for _, entityState in ipairs(state.entities) do
@@ -105,7 +108,8 @@ function Simulation:new(params)
     end,
 
     -- Methods to override
-    update = function(self, dt, inputs, events, isTopFrame) end
+    update = function(self, dt, inputs, events, isTopFrame) end,
+    handleEvent = function(self, eventType, eventData) end
   }
 
   -- Set the simulation's initial state
