@@ -1,5 +1,3 @@
-local transportLayers = {}
-
 local TransportLayer = {}
 function TransportLayer:new(params)
   local transportLayer = {
@@ -58,23 +56,8 @@ function TransportLayer:new(params)
     end
   }
 
-  -- Add to static array of transport layers
-  table.insert(transportLayers, transportLayer)
-
   -- Return the new transport layer
   return transportLayer
-end
-
--- Updates all tranport layers that have been instantiated
-function TransportLayer:updateAll(dt)
-  for _, transportLayer in ipairs(transportLayers) do
-    transportLayer:update(dt)
-  end
-end
-
--- Clears out the array of tranport layers being tracked
-function TransportLayer:removeAll()
-  transportLayers = {}
 end
 
 return TransportLayer

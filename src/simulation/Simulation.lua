@@ -1,4 +1,4 @@
-local tableHelpers = require 'src/helper/table'
+local tableUtils = require 'src/utils/table'
 
 local Simulation = {}
 function Simulation:new(params)
@@ -20,12 +20,12 @@ function Simulation:new(params)
         time = self.time,
         frame = self.frame,
         nextEntityId = self.nextEntityId,
-        inputs = tableHelpers.cloneTable(self.inputs),
-        data = tableHelpers.cloneTable(self.data),
+        inputs = tableUtils.cloneTable(self.inputs),
+        data = tableUtils.cloneTable(self.data),
         entities = {}
       }
       for _, entity in ipairs(self.entities) do
-        table.insert(state.entities, tableHelpers.cloneTable(self:_getStateFromEntity(entity)))
+        table.insert(state.entities, tableUtils.cloneTable(self:_getStateFromEntity(entity)))
       end
       return state
     end,
@@ -34,11 +34,11 @@ function Simulation:new(params)
       self.time = state.time
       self.frame = state.frame
       self.nextEntityId = state.nextEntityId
-      self.inputs = tableHelpers.cloneTable(state.inputs)
-      self.data = tableHelpers.cloneTable(state.data)
+      self.inputs = tableUtils.cloneTable(state.inputs)
+      self.data = tableUtils.cloneTable(state.data)
       self.entities = {}
       for _, entityState in ipairs(state.entities) do
-        table.insert(self.entities, self:_createEntityFromState(tableHelpers.cloneTable(entityState)))
+        table.insert(self.entities, self:_createEntityFromState(tableUtils.cloneTable(entityState)))
       end
     end,
     -- Creates another simulation identical to this one

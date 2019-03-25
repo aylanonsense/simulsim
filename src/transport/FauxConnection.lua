@@ -1,5 +1,5 @@
 -- Load dependencies
-local TransportLayer = require 'src/fauxNetwork/TransportLayer'
+local TransportLayer = require 'src/transport/FauxTransportLayer'
 
 local Connection = {}
 function Connection:new(params)
@@ -15,11 +15,11 @@ function Connection:new(params)
 
     -- Private vars
     _status = 'disconnected',
+    _flushReliably = false,
     _bufferedMessages = {},
     _heldMessages = {},
     _connectCallbacks = {},
     _disconnectCallbacks = {},
-    _sendCallbacks = {},
     _receiveCallbacks = {},
 
     -- Public methods
@@ -33,8 +33,9 @@ function Connection:new(params)
     end,
     disconnect = function(self, reason)
       if self._status ~= 'disconnected' then
-        local wasConnected = self:isConnected()
+        local wasConnected = self._status == 'connected'
         self._status = 'disconnected'
+        self._flushReliably = false
         self._bufferedMessages = {}
         self._heldMessages = {}
         if wasConnected then
@@ -51,34 +52,32 @@ function Connection:new(params)
       return self._status == 'connected'
     end,
     -- Buffers a message to be sent the next time flush is called
-    buffer = function(self, msg)
-      if self:isConnected() then
+    buffer = function(self, msg, reliable)
+      if self._status == 'connected' then
+        if reliable then
+          self._flushReliably = true
+        end
         table.insert(self._bufferedMessages, msg)
       end
     end,
     -- Sends all buffered messages that haven't been sent yet
-    flush = function(self)
-      if self:isConnected() then
+    flush = function(self, reliable)
+      if self._status == 'connected' then
         local messagesToSend = self._bufferedMessages
         self._bufferedMessages = {}
         -- Send the messages
         self._sendTransportLayer:send({
           type = 'messages',
           messages = messagesToSend
-        })
-        -- Trigger send callbacks
-        for _, msg in ipairs(messagesToSend) do
-          for _, callback in ipairs(self._sendCallbacks) do
-            callback(msg)
-          end
-        end
+        }, reliable or self._flushReliably)
+        self._flushReliably = false
       end
     end,
     -- Sends a message immediately (alongside all buffered messages)
-    send = function(self, msg)
-      if self:isConnected() then
+    send = function(self, msg, reliable)
+      if self._status == 'connected' then
         self:buffer(msg)
-        self:flush()
+        self:flush(reliable)
       end
     end,
 
@@ -99,8 +98,9 @@ function Connection:new(params)
     end,
     _handleDisconnect = function(self, reason)
       if self._status ~= 'disconnected' then
-        local wasConnected = self:isConnected()
+        local wasConnected = self._status == 'connected'
         self._status = 'disconnected'
+        self._flushReliably = false
         self._bufferedMessages = {}
         self._heldMessages = {}
         if wasConnected then
@@ -111,7 +111,7 @@ function Connection:new(params)
       end
     end,
     _handleReceive = function(self, msg)
-      if self:isConnected() then
+      if self._status ~= 'disconnected' then
         for _, callback in ipairs(self._receiveCallbacks) do
           callback(msg)
         end
@@ -126,9 +126,6 @@ function Connection:new(params)
     end,
     onDisconnect = function(self, callback)
       table.insert(self._disconnectCallbacks, callback)
-    end,
-    onSend = function(self, callback)
-      table.insert(self._sendCallbacks, callback)
     end,
     onReceive = function(self, callback)
       table.insert(self._receiveCallbacks, callback)

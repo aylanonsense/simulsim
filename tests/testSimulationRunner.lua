@@ -3,6 +3,8 @@ local Simulation = require 'src/simulation/Simulation'
 local SimulationRunner = require 'src/simulation/SimulationRunner'
 
 describe('simulation runner', function()
+  randomize()
+
   local sim, runner
 
   -- Helper function that simulates advancing through time
