@@ -51,6 +51,13 @@ function Connection:new(params)
     isConnected = function(self)
       return self._status == 'connected'
     end,
+    -- Sends a message immediately (alongside all buffered messages)
+    send = function(self, msg, reliable)
+      if self._status == 'connected' then
+        self:buffer(msg)
+        self:flush(reliable)
+      end
+    end,
     -- Buffers a message to be sent the next time flush is called
     buffer = function(self, msg, reliable)
       if self._status == 'connected' then
@@ -71,13 +78,6 @@ function Connection:new(params)
           messages = messagesToSend
         }, reliable or self._flushReliably)
         self._flushReliably = false
-      end
-    end,
-    -- Sends a message immediately (alongside all buffered messages)
-    send = function(self, msg, reliable)
-      if self._status == 'connected' then
-        self:buffer(msg)
-        self:flush(reliable)
       end
     end,
 

@@ -5,6 +5,20 @@ local SimulationRunner = require 'src/simulation/SimulationRunner'
 describe('simulation runner', function()
   randomize()
 
+  -- Define a simulation
+  local simulationDefinition = Simulation:define({
+    initialState = {
+      data = {
+        fruits = { 'apple' }
+      }
+    },
+    handleEvent = function(self, event)
+      if event.type == 'add-fruit' then
+        table.insert(self.data.fruits, event.fruit)
+      end
+    end
+  })
+
   local sim, runner
 
   -- Helper function that simulates advancing through time
@@ -16,30 +30,12 @@ describe('simulation runner', function()
 
   before_each(function()
     -- Create a simulation
-    sim = Simulation:new()
-    sim.update = function(self, dt, inputs, events, isTopFrame)
-      for _, event in ipairs(events) do
-        if event.type == 'add-fruit' then
-          table.insert(self.data.fruits, event.fruit)
-        end
-      end
-    end
+    sim = simulationDefinition:new()
     -- Create a runner for that simulation
     runner = SimulationRunner:new({
       simulation = sim,
       framesOfHistory = 30,
       framesBetweenStateSnapshots = 5
-    })
-    -- Set the initial state
-    runner:setState({
-      time = 0.00,
-      frame = 0,
-      nextEntityId = 1,
-      inputs = {},
-      data = {
-        fruits = { 'apple' }
-      },
-      entities = {}
     })
     -- Advance forward
     progressFrames(60)
@@ -130,11 +126,13 @@ describe('simulation runner', function()
   describe('applyEvent()', function()
     it('schedules events to occur in the future', function()
       runner:applyEvent({
+        id = 'some-event',
         frame = 65,
         type = 'add-fruit',
         fruit = 'orange'
       })
       runner:applyEvent({
+        id = 'some-other-event',
         frame = 80,
         type = 'add-fruit',
         fruit = 'banana'
@@ -194,7 +192,7 @@ describe('simulation runner', function()
         isInputEvent = true,
         type = 'set-inputs',
         clientId = 2,
-        inputs = {
+        data = {
           left = true,
           right = false
         }
@@ -208,7 +206,7 @@ describe('simulation runner', function()
         isInputEvent = true,
         type = 'set-inputs',
         clientId = 2,
-        inputs = {
+        data = {
           left = true,
           right = false
         }
@@ -223,7 +221,7 @@ describe('simulation runner', function()
         isInputEvent = true,
         type = 'set-inputs',
         clientId = 2,
-        inputs = {
+        data = {
           left = true,
           right = false
         }
@@ -236,7 +234,7 @@ describe('simulation runner', function()
   describe('unapplyEvent()', function()
     it('returns true if the event could be unapplied', function()
       runner:applyEvent({
-        eventId = 'some-event-id',
+        id = 'some-event-id',
         frame = 40,
         type = 'add-fruit',
         fruit = 'orange'
@@ -245,7 +243,7 @@ describe('simulation runner', function()
     end)
     it('returns false if the event could not be unapplied', function()
       runner:applyEvent({
-        eventId = 'some-event-id',
+        id = 'some-event-id',
         frame = 40,
         type = 'add-fruit',
         fruit = 'orange'
@@ -254,12 +252,13 @@ describe('simulation runner', function()
     end)
     it('undoes the effects of an event', function()
       runner:applyEvent({
-        eventId = 'some-event-id',
+        id = 'some-event-id',
         frame = 40,
         type = 'add-fruit',
         fruit = 'orange'
       })
       runner:applyEvent({
+        id = 'some-other-event-id',
         frame = 45,
         type = 'add-fruit',
         fruit = 'banana'

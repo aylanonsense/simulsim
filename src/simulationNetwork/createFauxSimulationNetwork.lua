@@ -1,23 +1,27 @@
 -- Load dependencies
 local TransportLayer = require 'src/transport/FauxTransportLayer'
 local Connection = require 'src/transport/FauxConnection'
-local Server = require 'src/network/Server'
-local Client = require 'src/network/Client'
+local Server = require 'src/simulationNetwork/Server'
+local Client = require 'src/simulationNetwork/Client'
 
 -- Creates a fake, in-memory network of clients and servers
 return function(params)
-  local numClients = params and params.numClients or 1
+  params = params or {}
+  local simulationDefinition = params.simulationDefinition
+  local numClients = params.numClients or 1
   local transportLayerParams = {
-    latency = params and params.latency,
-    latencyDeviation = params and params.latencyDeviation,
-    packetLossChance = params and params.packetLossChance
+    latency = params.latency,
+    latencyDeviation = params.latencyDeviation,
+    packetLossChance = params.packetLossChance
   }
 
   -- Keep track of the transport layers
   local transportLayers = {}
 
   -- Create the server
-  local server = Server:new()
+  local server = Server:new({
+    simulationDefinition = simulationDefinition
+  })
 
   -- Create the clients
   local clients = {}
@@ -45,6 +49,7 @@ return function(params)
       receiveTransportLayer = serverToClient
     })
     table.insert(clients, Client:new({
+      simulationDefinition = simulationDefinition,
       conn = clientConn
     }))
   end

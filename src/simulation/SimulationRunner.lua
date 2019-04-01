@@ -1,8 +1,9 @@
 local SimulationRunner = {}
 function SimulationRunner:new(params)
-  local simulation = params and params.simulation
-  local framesOfHistory = params and params.framesOfHistory or 30
-  local framesBetweenStateSnapshots = params and params.framesBetweenStateSnapshots or 5
+  params = params or {}
+  local simulation = params.simulation
+  local framesOfHistory = params.framesOfHistory or 30
+  local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 5
 
   return {
     -- Private config vars
@@ -20,7 +21,19 @@ function SimulationRunner:new(params)
     end,
     -- Adds an event to be applied on the given frame, which may trigger a rewind
     applyEvent = function(self, event)
-      table.insert(self._eventHistory, event)
+      -- See if there already exists an event with that id
+      local replacedEvent = false
+      for i = #self._eventHistory, 1, -1 do
+        if self._eventHistory[i].id == event.id then
+          self._eventHistory[i] = event
+          replacedEvent = true
+          break
+        end
+      end
+      -- Otherwise just insert it
+      if not replacedEvent then
+        table.insert(self._eventHistory, event)
+      end
       -- If the event occurred too far in the past, there's not much we can do about it
       if event.frame < self._simulation.frame - self._framesOfHistory then
         return false
@@ -37,7 +50,7 @@ function SimulationRunner:new(params)
       -- Search for the event
       for i = #self._eventHistory, 1, -1 do
         local event = self._eventHistory[i]
-        if event.eventId == eventId then
+        if event.id == eventId then
           -- Remove the event
           table.remove(self._eventHistory, i)
           -- Regenerate state history if the event was applied in the past
@@ -67,6 +80,11 @@ function SimulationRunner:new(params)
       -- TODO take dt into account
       self:_moveSimulationForwardOneFrame(true, true)
       self:_removeOldHistory()
+    end,
+    reset = function(self)
+      self._simulation:reset()
+      self._stateHistory = {}
+      self._eventHistory = {}
     end,
 
     -- Private methods
@@ -134,10 +152,10 @@ function SimulationRunner:new(params)
       local nonInputEvents = {}
       for _, event in ipairs(events) do
         if event.isInputEvent and event.type == 'set-inputs' then
-          self._simulation.inputs[event.clientId] = event.inputs
+          self._simulation.inputs[event.clientId] = event.data
         else
           table.insert(nonInputEvents, event)
-          self._simulation:handleEvent(event.type, event.data)
+          self._simulation:handleEvent(event)
         end
       end
       -- Update the simulation

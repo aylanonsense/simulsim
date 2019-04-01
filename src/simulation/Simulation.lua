@@ -1,10 +1,17 @@
 local tableUtils = require 'src/utils/table'
 
+-- Useful no-op method
+function noop() end
+
 local Simulation = {}
 function Simulation:new(params)
-  local initialState = params and params.initialState
+  params = params or {}
+  local initialState = params.initialState
 
-  local sim = {
+  local simulation = {
+    -- Private vars
+    _initialState = initialState,
+
     -- Public vars
     time = 0.00,
     frame = 0,
@@ -31,30 +38,33 @@ function Simulation:new(params)
     end,
     -- Sets the current state of the simulation
     setState = function(self, state)
-      self.time = state.time
-      self.frame = state.frame
-      self.nextEntityId = state.nextEntityId
-      self.inputs = tableUtils.cloneTable(state.inputs)
-      self.data = tableUtils.cloneTable(state.data)
-      self.entities = {}
-      for _, entityState in ipairs(state.entities) do
-        table.insert(self.entities, self:_createEntityFromState(tableUtils.cloneTable(entityState)))
+      self.time = state.time or self.time
+      self.frame = state.frame or self.frame
+      self.nextEntityId = state.nextEntityId or self.nextEntityId
+      if state.inputs then
+        self.inputs = tableUtils.cloneTable(state.inputs)
+      end
+      if state.data then
+        self.data = tableUtils.cloneTable(state.data)
+      end
+      if state.entities then
+        self.entities = {}
+        for _, entityState in ipairs(state.entities) do
+          table.insert(self.entities, self:_createEntityFromState(tableUtils.cloneTable(entityState)))
+        end
       end
     end,
     -- Creates another simulation identical to this one
     clone = function(self)
       -- Create a new simulation
-      local clonedSim = Simulation:new()
-      -- Copy all the functions that may have been overridden
-      for k, v in pairs(self) do
-        if type(v) == 'function' then
-          clonedSim[k] = v
-        end
-      end
+      local clonedSimulation = Simulation:new()
+      -- Copy all overrideable methods
+      clonedSimulation.update = self.update
+      clonedSimulation.handleEvent = self.handleEvent
       -- Set the new simuation's state
-      clonedSim:setState(self:getState())
+      clonedSimulation:setState(self:getState())
       -- Return the newly-cloned simulation
-      return clonedSim
+      return clonedSimulation
     end,
     -- Gets an entity with the given id
     getEntityById = function(self, entityId)
@@ -81,6 +91,15 @@ function Simulation:new(params)
           return entity
         end
       end
+    end,
+    reset = function(self)
+      self.time = 0.00
+      self.frame = 0
+      self.nextEntityId = 1
+      self.inputs = {}
+      self.data = {}
+      self.entities = {}
+      self:setState(self._initialState)
     end,
 
     -- Private methods
@@ -109,16 +128,36 @@ function Simulation:new(params)
 
     -- Methods to override
     update = function(self, dt, inputs, events, isTopFrame) end,
-    handleEvent = function(self, eventType, eventData) end
+    handleEvent = function(self, event) end
   }
 
   -- Set the simulation's initial state
   if initialState then
-    sim:setState(initialState)
+    simulation:setState(initialState)
   end
 
   -- Return the new simulation
-  return sim
+  return simulation
+end
+function Simulation:define(params)
+  params = params or {}
+  local initialState = params.initialState
+  local update = params.update or noop
+  local handleEvent = params.handleEvent or noop
+
+  return {
+    new = function(params)
+      params = params or {}
+      params.initialState = params.initialState or initialState
+      -- Create a new simulation
+      local simulation = Simulation:new(params)
+      -- Override the overridable methods
+      simulation.update = update
+      simulation.handleEvent = handleEvent
+      -- Return the new simulation
+      return simulation
+    end
+  }
 end
 
 return Simulation

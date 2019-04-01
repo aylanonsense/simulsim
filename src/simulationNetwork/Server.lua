@@ -1,27 +1,35 @@
+-- Load dependencies
+local SimulationRunner = require 'src/simulation/SimulationRunner'
+local stringUtils = require 'src/utils/string'
+
 local Client = {}
 function Client:new(params)
-  local clientId = params and params.clientId
-  local conn = params and params.conn
+  params = params or {}
+  local clientId = params.clientId
+  local conn = params.conn
 
   local client = {
     -- Private vars
     _conn = conn,
     _status = 'connecting',
     _disconnectCallbacks = {},
-    _receiveCallbacks = {},
+    _receiveEventCallbacks = {},
 
     -- Public vars
     clientId = clientId,
+    data = {},
 
     -- Public methods
     -- Allow a client to connect to the server
-    accept = function(self, clientData)
+    accept = function(self, clientData, state)
       if self._status == 'connecting' then
         self._status = 'connected'
+        self.data = clientData
         self._conn:buffer({
           type = 'accept-client',
           clientId = self.clientId,
-          clientData = clientData
+          clientData = clientData,
+          state = state
         }, true)
         return true
       end
@@ -64,23 +72,27 @@ function Client:new(params)
     isConnecting = function(self)
       return self._status == 'connecting'
     end,
-    send = function(self, msg, reliable)
-      if self._status == 'connected' then
-        self._conn:send({
-          type = 'message',
-          message = msg
-        }, reliable)
-      end
-    end,
-    buffer = function(self, msg, reliable)
+    fireEvent = function(self, event, params)
+      local reliable = params and params.reliable
       if self._status == 'connected' then
         self._conn:buffer({
-          type = 'message',
-          message = msg
+          type = 'event',
+          event = event
         }, reliable)
       end
     end,
-    flush = function(self, msg, reliable)
+    -- Rejects an event that came from this client
+    rejectEvent = function(self, event, params)
+      local reliable = params and params.reliable
+      if self._status == 'connected' then
+        self._conn:buffer({
+          type = 'reject-event',
+          event = event
+        }, reliable)
+      end
+    end,
+    flush = function(self, params)
+      local reliable = params and params.reliable
       if self._status == 'connected' then
         self._conn:flush(reliable)
       end
@@ -88,34 +100,33 @@ function Client:new(params)
 
     -- Private methods
     _handleDisconnect = function(self, reason)
-      if self._status == 'connected' then
+      local wasConnected = self._status == 'connected'
+      if self._status ~= 'disconnected' then
         self._status = 'disconnected'
-        for _, callback in ipairs(self._disconnectCallbacks) do
-          callback(reason or 'Connection terminated')
+        if wasConnected then
+          for _, callback in ipairs(self._disconnectCallbacks) do
+            callback(reason or 'Connection terminated')
+          end
         end
-      elseif self._status == 'connecting' then
-        self._status = 'disconnected'
-        -- Don't trigger disconnect callbacks, because the client wasn't considered to be "connected"
       end
     end,
     _handleClientDisconnectRequest = function(self, reason)
-      if self._status == 'connected' then
+      local wasConnected = self._status == 'connected'
+      if self._status ~= 'disconnected' then
         self._status = 'disconnected'
         self._conn:disconnect('Client disconnected')
         -- Trigger disconnect callbacks
-        for _, callback in ipairs(self._disconnectCallbacks) do
-          callback(reason or 'Client disconnected')
+        if wasConnected then
+          for _, callback in ipairs(self._disconnectCallbacks) do
+            callback(reason or 'Client disconnected')
+          end
         end
-      elseif self._status == 'connecting' then
-        self._status = 'disconnected'
-        self._conn:disconnect('Client disconnected')
-        -- Don't trigger disconnect callbacks, because the client wasn't considered to be "connected"
       end
     end,
-    _handleReceive = function(self, msg)
+    _handleReceiveEvent = function(self, event)
       if self._status == 'connected' then
-        for _, callback in ipairs(self._receiveCallbacks) do
-          callback(msg)
+        for _, callback in ipairs(self._receiveEventCallbacks) do
+          callback(event)
         end
       end
     end,
@@ -124,8 +135,8 @@ function Client:new(params)
     onDisconnect = function(self, callback)
       table.insert(self._disconnectCallbacks, callback)
     end,
-    onReceive = function(self, callback)
-      table.insert(self._receiveCallbacks, callback)
+    onReceiveEvent = function(self, callback)
+      table.insert(self._receiveEventCallbacks, callback)
     end
   }
 
@@ -134,8 +145,8 @@ function Client:new(params)
     client:_handleDisconnect(reason)
   end)
   conn:onReceive(function(msg)
-    if msg.type == 'message' then
-      client:_handleReceive(msg.message)
+    if msg.type == 'event' then
+      client:_handleReceiveEvent(msg.event)
     elseif msg.type == 'client-disconnect' then
       client:_handleClientDisconnectRequest(msg.reason)
     end
@@ -146,12 +157,24 @@ end
 
 -- The server, which manages connected clients
 local Server = {}
-function Server:new()
+function Server:new(params)
+  params = params or {}
+  local initialState = params.initialState
+  local simulationDefinition = params.simulationDefinition
+  local simulation = simulationDefinition:new({
+    initialState = initialState
+  })
+  local runner = SimulationRunner:new({
+    simulation = simulation
+  })
+
   return {
     -- Private vars
     _isListening = false,
     _nextClientId = 1,
     _clients = {},
+    _simulation = simulation,
+    _runner = runner,
     _startListeningCallbacks = {},
     _stopListeningCallbacks = {},
     _connectCallbacks = {},
@@ -199,27 +222,6 @@ function Server:new()
         callback(self._clients[i])
       end
     end,
-    -- Sends a message (and all buffered messages) to a client
-    send = function(self, clientId, msg, reliable)
-      local client = self:getClientById(clientId)
-      if client then
-        client:send(msg, reliable)
-      end
-    end,
-    -- Buffers a message to a client
-    buffer = function(self, clientId, msg, reliable)
-      local client = self:getClientById(clientId)
-      if client then
-        client:buffer(msg, reliable)
-      end
-    end,
-    -- Flushes all buffered messages to a client
-    flush = function(self, clientId, reliable)
-      local client = self:getClientById(clientId)
-      if client then
-        client:flush(reliable)
-      end
-    end,
     -- Disconnects a client
     disconnect = function(self, clientId, reason)
       local client = self:getClientById(clientId)
@@ -227,29 +229,25 @@ function Server:new()
         client:disconnect(reason)
       end
     end,
-    -- Sends a message (and all buffered messages) to al clients
-    sendAll = function(self, msg, reliable)
-      self:forEachClient(function(client)
-        client:send(msg, reliable)
-      end)
-    end,
-    -- Buffers a message to all clients
-    bufferAll = function(self, msg, reliable)
-      self:forEachClient(function(client)
-        client:buffer(msg, reliable)
-      end)
-    end,
-    -- Flushes all buffered messages to all clients
-    flushAll = function(self, reliable)
-      self:forEachClient(function(client)
-        client:flush(reliable)
-      end)
-    end,
     -- Disconnects all clients
     disconnectAll = function(self, reason)
       self:forEachClient(function(client)
         client:disconnect(reason)
       end)
+    end,
+    -- Fires an event for the simulation and lets all clients know
+    fireEvent = function(self, eventType, eventData, params)
+      -- Create an event
+      local event = {
+        id = stringUtils:generateRandomString(10),
+        frame = self._simulation.frame,
+        type = eventType,
+        data = eventData
+      }
+      -- Apply the event server-side and let the clients know about it
+      self:_applyEvent(event, params)
+      -- Return the event
+      return event
     end,
     -- Connects a client to the server
     handleConnect = function(self, conn)
@@ -264,15 +262,15 @@ function Server:new()
         -- What happens if the client gets accepted
         local acceptClient = function(clientData)
           -- Accept the connection
-          if client:accept(clientData) then
+          if client:accept(clientData, self._simulation:getState()) then
             -- Add the new client to the server
             table.insert(self._clients, client)
             -- Bind events
             client:onDisconnect(function(reason)
               self:_handleDisconnect(client, reason)
             end)
-            client:onReceive(function(msg)
-              self:_handleReceive(client, msg)
+            client:onReceiveEvent(function(event)
+              self:_handleReceiveEvent(client, event)
             end)
             -- Trigger the connect callback
             for _, callback in ipairs(self._connectCallbacks) do
@@ -290,9 +288,22 @@ function Server:new()
         self:handleClientConnectAttempt(client, acceptClient, rejectClient)
       end
     end,
+    update = function(self, dt)
+      self._runner:update(dt)
+    end,
+
+    -- Overridable methods
     -- Call accept with client data you'd like to give to the client, or reject with a reason for rejection
     handleClientConnectAttempt = function(self, client, accept, reject)
       accept()
+    end,
+    -- By default the server sends every event to all clients
+    shouldSendEventToClient = function(self, client, event)
+      return true
+    end,
+    -- By default the server is entirely trusting
+    shouldAcceptEventFromClient = function(self, client, event)
+      return true
     end,
 
     -- Private methods
@@ -308,10 +319,29 @@ function Server:new()
         callback(client, reason or 'Server forced disconnect')
       end
     end,
-    _handleReceive = function(self, client, msg)
-      for _, callback in ipairs(self._receiveCallbacks) do
-        callback(client, msg)
+    _handleReceiveEvent = function(self, client, event, params)
+      local eventApplied = false
+      if self:shouldAcceptEventFromClient(client, event) then
+        -- Apply the event server-side and let all clients know about it
+        eventApplied = self:_applyEvent(event)
       end
+      if not eventApplied then
+        -- Let the client know that their event was rejected or wasn't able to be applied
+        client:rejectEvent(event, params)
+      end
+    end,
+    _applyEvent = function(self, event, params)
+      -- Apply the event server-side
+      if self._runner:applyEvent(event) then
+        -- Let all clients know about the event
+        self:forEachClient(function(client)
+          if self:shouldSendEventToClient(client, event) then
+            client:fireEvent(event, params)
+          end
+        end)
+        return true
+      end
+      return false
     end,
 
     -- Callback methods
@@ -326,9 +356,6 @@ function Server:new()
     end,
     onDisconnect = function(self, callback)
       table.insert(self._disconnectCallbacks, callback)
-    end,
-    onReceive = function(self, callback)
-      table.insert(self._receiveCallbacks, callback)
     end
   }
 end
