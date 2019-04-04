@@ -80,6 +80,8 @@ function SimulationRunner:new(params)
       -- TODO take dt into account
       self:_moveSimulationForwardOneFrame(true, true)
       self:_removeOldHistory()
+      -- Return the number of frames that have been advanced
+      return 1
     end,
     reset = function(self)
       self._simulation:reset()

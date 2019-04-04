@@ -11,22 +11,28 @@ function Client:new(params)
   local client = {
     -- Private vars
     _conn = conn,
-    _status = 'connecting',
+    _status = 'handshaking',
+    _connectRequestCallbacks = {},
     _disconnectCallbacks = {},
     _receiveEventCallbacks = {},
 
     -- Public vars
     clientId = clientId,
     data = {},
+    framesBetweenFlushes = 0,
+    framesUntilNextFlush = 0,
 
     -- Public methods
     -- Allow a client to connect to the server
-    accept = function(self, clientData, state)
-      if self._status == 'connecting' then
+    acceptConnection = function(self, handshake, clientData, state)
+      if self._status == 'handshaking' then
         self._status = 'connected'
         self.data = clientData
+        if handshake and handshake.framesBetweenFlushes then
+          self.framesBetweenFlushes = handshake.framesBetweenFlushes
+        end
         self._conn:buffer({
-          type = 'accept-client',
+          type = 'connect-accept',
           clientId = self.clientId,
           clientData = clientData,
           state = state
@@ -36,12 +42,12 @@ function Client:new(params)
       return false
     end,
     -- Prevent a client from connecting to the server
-    reject = function(self, reason)
-      if self._status == 'connecting' then
+    rejectConnection = function(self, reason)
+      if self._status == 'handshaking' then
         -- Let the client know why it was rejected
         self._status = 'disconnected'
         self._conn:send({
-          type = 'reject-client',
+          type = 'connect-reject',
           reason = reason
         }, true)
         self._conn:disconnect('Connection rejected')
@@ -70,15 +76,18 @@ function Client:new(params)
     end,
     -- Returns true if the client is currently waiting to be accepted by the server
     isConnecting = function(self)
-      return self._status == 'connecting'
+      return self._status == 'handshaking'
     end,
-    fireEvent = function(self, event, params)
+    sendEvent = function(self, event, params)
       local reliable = params and params.reliable
       if self._status == 'connected' then
         self._conn:buffer({
           type = 'event',
           event = event
         }, reliable)
+        if self.framesBetweenFlushes == 0 then
+          self:flush()
+        end
       end
     end,
     -- Rejects an event that came from this client
@@ -89,6 +98,9 @@ function Client:new(params)
           type = 'reject-event',
           event = event
         }, reliable)
+        if self.framesBetweenFlushes == 0 then
+          self:flush()
+        end
       end
     end,
     flush = function(self, params)
@@ -97,8 +109,23 @@ function Client:new(params)
         self._conn:flush(reliable)
       end
     end,
+    update = function(self, dt, numFrames)
+      -- Flush the client's messages every so often
+      self.framesUntilNextFlush = self.framesUntilNextFlush - numFrames
+      if self.framesUntilNextFlush <= 0 then
+        self.framesUntilNextFlush = self.framesBetweenFlushes
+        self:flush()
+      end
+    end,
 
     -- Private methods
+    _handleClientConnectRequest = function(self, handshake)
+      if self._status == 'handshaking' then
+        for _, callback in ipairs(self._connectRequestCallbacks) do
+          callback(handshake)
+        end
+      end
+    end,
     _handleDisconnect = function(self, reason)
       local wasConnected = self._status == 'connected'
       if self._status ~= 'disconnected' then
@@ -132,12 +159,15 @@ function Client:new(params)
     end,
 
     -- Callback methods
+    onConnectRequest = function(self, callback)
+      table.insert(self._connectRequestCallbacks, callback)
+    end,
     onDisconnect = function(self, callback)
       table.insert(self._disconnectCallbacks, callback)
     end,
     onReceiveEvent = function(self, callback)
       table.insert(self._receiveEventCallbacks, callback)
-    end
+    end,
   }
 
   -- Bind events
@@ -145,10 +175,12 @@ function Client:new(params)
     client:_handleDisconnect(reason)
   end)
   conn:onReceive(function(msg)
-    if msg.type == 'event' then
-      client:_handleReceiveEvent(msg.event)
-    elseif msg.type == 'client-disconnect' then
+    if msg.type == 'connect-request' then
+      client:_handleClientConnectRequest(msg.handshake)
+    elseif msg.type == 'disconnect-request' then
       client:_handleClientDisconnectRequest(msg.reason)
+    elseif msg.type == 'event' then
+      client:_handleReceiveEvent(msg.event)
     end
   end)
 
@@ -161,6 +193,8 @@ function Server:new(params)
   params = params or {}
   local initialState = params.initialState
   local simulationDefinition = params.simulationDefinition
+
+  -- Create the simulation
   local simulation = simulationDefinition:new({
     initialState = initialState
   })
@@ -239,8 +273,8 @@ function Server:new(params)
     fireEvent = function(self, eventType, eventData, params)
       -- Create an event
       local event = {
-        id = stringUtils:generateRandomString(10),
-        frame = self._simulation.frame,
+        id = 'server-' .. stringUtils.generateRandomString(10),
+        frame = self._simulation.frame + 1,
         type = eventType,
         data = eventData
       }
@@ -259,42 +293,54 @@ function Server:new(params)
           clientId = clientId,
           conn = conn
         })
-        -- What happens if the client gets accepted
-        local acceptClient = function(clientData)
-          -- Accept the connection
-          if client:accept(clientData, self._simulation:getState()) then
-            -- Add the new client to the server
-            table.insert(self._clients, client)
-            -- Bind events
-            client:onDisconnect(function(reason)
-              self:_handleDisconnect(client, reason)
-            end)
-            client:onReceiveEvent(function(event)
-              self:_handleReceiveEvent(client, event)
-            end)
-            -- Trigger the connect callback
-            for _, callback in ipairs(self._connectCallbacks) do
-              callback(client)
+        client:onConnectRequest(function(handshake)
+          -- What happens if the client gets accepted
+          local accept = function(clientData)
+            -- Accept the connection
+            if client:acceptConnection(handshake, clientData, self._simulation:getState()) then
+              -- Add the new client to the server
+              table.insert(self._clients, client)
+              -- Bind events
+              client:onDisconnect(function(reason)
+                self:_handleDisconnect(client, reason)
+              end)
+              client:onReceiveEvent(function(event)
+                self:_handleReceiveEvent(client, event)
+              end)
+              -- Trigger the connect callback
+              for _, callback in ipairs(self._connectCallbacks) do
+                callback(client)
+              end
+              -- Flush the connect message to the client
+              client:flush()
+            else
+              client:rejectConnection('Failed to accept connection')
             end
-            -- Flush the connect message to the client
-            client:flush()
           end
-        end
-        -- What happens if the client gets rejected
-        local rejectClient = function(reason)
-          client:reject(reason)
-        end
-        -- Determine if the client should get accepted or rejected
-        self:handleClientConnectAttempt(client, acceptClient, rejectClient)
+          -- What happens if the client gets rejected
+          local reject = function(reason)
+            client:rejectConnection(reason)
+          end
+          -- Determine if the client should get accepted or rejected
+          self:handleConnectRequest(client, handshake, accept, reject)
+        end)
       end
     end,
+    getSimulation = function(self)
+      return self._simulation
+    end,
     update = function(self, dt)
-      self._runner:update(dt)
+      -- Update the simulation (via the simulation runner)
+      local numFrames = self._runner:update(dt)
+      -- Update all clients
+      for _, client in ipairs(self._clients) do
+        client:update(dt, numFrames)
+      end
     end,
 
     -- Overridable methods
     -- Call accept with client data you'd like to give to the client, or reject with a reason for rejection
-    handleClientConnectAttempt = function(self, client, accept, reject)
+    handleConnectRequest = function(self, client, handshake, accept, reject)
       accept()
     end,
     -- By default the server sends every event to all clients
@@ -321,6 +367,8 @@ function Server:new(params)
     end,
     _handleReceiveEvent = function(self, client, event, params)
       local eventApplied = false
+      -- TODO reject if too far in the past
+      -- TODO update frame if in the past and adjusting is allowed
       if self:shouldAcceptEventFromClient(client, event) then
         -- Apply the event server-side and let all clients know about it
         eventApplied = self:_applyEvent(event)
@@ -336,7 +384,7 @@ function Server:new(params)
         -- Let all clients know about the event
         self:forEachClient(function(client)
           if self:shouldSendEventToClient(client, event) then
-            client:fireEvent(event, params)
+            client:sendEvent(event, params)
           end
         end)
         return true

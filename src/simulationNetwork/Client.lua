@@ -6,6 +6,7 @@ local Client = {}
 function Client:new(params)
   params = params or {}
   local conn = params.conn
+  local framesBetweenFlushes = params.framesBetweenFlushes or 0
   local simulationDefinition = params.simulationDefinition
   local simulation = simulationDefinition:new()
   local runner = SimulationRunner:new({
@@ -21,15 +22,19 @@ function Client:new(params)
     _disconnectCallbacks = {},
     _simulation = simulation,
     _runner = runner,
+    _handshake = nil,
 
     -- Public vars
     clientId = nil,
     data = {},
+    framesBetweenFlushes = framesBetweenFlushes,
+    framesUntilNextFlush = framesBetweenFlushes,
 
     -- Public methods
-    connect = function(self)
+    connect = function(self, handshake)
       if self._status == 'disconnected' then
         self._status = 'connecting'
+        self._handshake = handshake
         self._conn:connect()
       end
     end,
@@ -42,7 +47,7 @@ function Client:new(params)
       elseif self._status == 'connected' then
         -- Let the server know why the client's disconnecting
         self._conn:send({
-          type = 'client-disconnect',
+          type = 'disconnect-request',
           reason = reason
         }, true)
         self.clientId = nil
@@ -59,15 +64,15 @@ function Client:new(params)
       return self._status == 'connected'
     end,
     isConnecting = function(self)
-      return self._status == 'connecting'
+      return self._status == 'connecting' or self._status == 'handshaking'
     end,
     fireEvent = function(self, eventType, eventData, params)
       local reliable = params and params.reliable
       if self._status == 'connected' then
         -- Create a new event
         local event = {
-          id = 'client-' .. self.clientId .. '-' .. stringUtils:generateRandomString(10),
-          frame = self._simulation.frame, -- TODO + latency
+          id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
+          frame = self._simulation.frame + 1, -- TODO + latency
           type = eventType,
           data = eventData
         }
@@ -76,6 +81,10 @@ function Client:new(params)
           type = 'event',
           event = event
         }, reliable)
+        -- Send immediately if we're not buffering
+        if self.framesBetweenFlushes == 0 then
+          self:flush()
+        end
         -- Return the event
         return event
       end
@@ -85,8 +94,8 @@ function Client:new(params)
       if self._status == 'connected' then
         -- Create a new event
         local event = {
-          id = 'client-' .. self.clientId .. '-' .. stringUtils:generateRandomString(10),
-          frame = self._simulation.frame, -- TODO + latency
+          id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
+          frame = self._simulation.frame + 1, -- TODO + latency
           type = 'set-inputs',
           data = inputs,
           isInputEvent = true
@@ -105,13 +114,32 @@ function Client:new(params)
         self._conn:flush(reliable)
       end
     end,
+    getSimulation = function(self)
+      return self._simulation
+    end,
     update = function(self, dt)
-      self._runner:update(dt)
+      -- Update the simulation (via the simulation runner)
+      local numFrames = self._runner:update(dt)
+      -- Flush the client's messages every so often
+      self.framesUntilNextFlush = self.framesUntilNextFlush - numFrames
+      if self.framesUntilNextFlush <= 0 then
+        self.framesUntilNextFlush = self.framesBetweenFlushes
+        self:flush()
+      end
     end,
 
     -- Private methods
-    _handleConnect = function(self, clientId, clientData, state)
+    _handleConnect = function(self)
       if self._status == 'connecting' then
+        self._status = 'handshaking'
+        self._conn:send({
+          type = 'connect-request',
+          handshake = self._handshake
+        })
+      end
+    end,
+    _handleConnectAccept = function(self, clientId, clientData, state)
+      if self._status == 'handshaking' then
         self._status = 'connected'
         self.clientId = clientId
         self.data = clientData or {}
@@ -183,13 +211,16 @@ function Client:new(params)
   }
 
   -- Bind events
+  conn:onConnect(function()
+    client:_handleConnect()
+  end)
   conn:onDisconnect(function(reason)
     client:_handleDisconnect(reason)
   end)
   conn:onReceive(function(msg)
-    if msg.type == 'accept-client' then
-      client:_handleConnect(msg.clientId, msg.clientData, msg.state)
-    elseif msg.type == 'reject-client' then
+    if msg.type == 'connect-accept' then
+      client:_handleConnectAccept(msg.clientId, msg.clientData, msg.state)
+    elseif msg.type == 'connect-reject' then
       client:_handleConnectReject(msg.reason)
     elseif msg.type == 'force-disconnect' then
       client:_handleDisconnect(msg.reason)

@@ -14,7 +14,7 @@ describe('faux simulation network', function()
     },
     handleEvent = function(self, event)
       if event.type == 'add-fruit' then
-        table.insert(self.data.fruits, event.fruit)
+        table.insert(self.data.fruits, event.data.fruit)
       end
     end
   })
@@ -32,7 +32,19 @@ describe('faux simulation network', function()
     server, clients, transportLayers = createFauxSimulationNetwork(params)
   end
 
-  -- Helper function to pretend time has passed (by updating 60 times per second)
+  -- Helper functions to pretend time has passed (by updating 60 times per second)
+  function progressFrames(frames)
+    local dt = 1 / 60
+    for i = 1, frames do
+      for _, transportLayer in ipairs(transportLayers) do
+        transportLayer:update(dt)
+        server:update(dt)
+        for _, client in ipairs(clients) do
+          client:update(dt)
+        end
+      end
+    end
+  end
   function progressTime(seconds)
     local dt = 1 / 60
     for i = 1, 60 * seconds do
@@ -76,7 +88,7 @@ describe('faux simulation network', function()
       assert.is.equal(0, #server:getClients())
     end)
     it('can set client data on a client when it connects', function()
-      server.handleClientConnectAttempt = function(self, client, accept, reject)
+      server.handleConnectRequest = function(self, client, handshake, accept, reject)
         accept({ color = 'red' })
       end
       server:startListening()
@@ -85,7 +97,7 @@ describe('faux simulation network', function()
       assert.is.same({ color = 'red' }, server:getClients()[1].data)
     end)
     it('can reject clients that try to connect', function()
-      server.handleClientConnectAttempt = function(self, client, accept, reject)
+      server.handleConnectRequest = function(self, client, handshake, accept, reject)
         reject('Test rejection message')
       end
       server:startListening()
@@ -101,6 +113,20 @@ describe('faux simulation network', function()
       server:disconnectAll('disconnect reason')
       assert.False(clients[1]:isConnected())
       assert.is.equal(0, #server:getClients())
+    end)
+    it('applies the event to the server-side simulation when fireEvent() is called', function()
+      server:fireEvent('add-fruit', { fruit = 'banana' })
+      progressFrames(1)
+      assert.is.same({ 'apple', 'banana' }, server:getSimulation().data.fruits)
+    end)
+    it('applies event sent from clients to the server-side simulation', function()
+      print('xxxxxxxxxxxxx')
+      server:startListening()
+      clients[1]:connect()
+      clients[1]:fireEvent('add-fruit', { fruit = 'lemon' })
+      progressFrames(10)
+      assert.is.same({ 'apple', 'lemon' }, server:getSimulation().data.fruits)
+      print('xxxxxxxxxxxxx')
     end)
     it('triggers onStartListening() callbacks when the server starts listening for connections', function()
       local callbackTriggered = false
@@ -148,6 +174,13 @@ describe('faux simulation network', function()
       clients[1]:connect()
       assert.is.truthy(clients[1].clientId)
     end)
+    it('matches the state of the server after connecting', function()
+      server:fireEvent('add-fruit', { fruit = 'banana' })
+      progressFrames(1)
+      server:startListening()
+      clients[1]:connect()
+      assert.is.same(server:getSimulation().data.fruits, clients[1]:getSimulation().data.fruits)
+    end)
     it('triggers onConnect() callbacks when connecting to a server', function()
       local callbackTriggered = false
       clients[1]:onConnect(function() callbackTriggered = true end)
@@ -157,7 +190,7 @@ describe('faux simulation network', function()
       assert.True(callbackTriggered)
     end)
     it('triggers onConnectFailure() callbacks when rejected by the server', function()
-      server.handleClientConnectAttempt = function(self, client, accept, reject)
+      server.handleConnectRequest = function(self, client, handshake, accept, reject)
         reject('Test rejection message')
       end
       local rejectReason = nil
@@ -190,5 +223,141 @@ describe('faux simulation network', function()
       assert.is.equal(1, #server:getClients())
       assert.True(clients[1]:isConnected())
     end)
+    -- it('takes time for the client to receive a message', function()
+    --   createNetwork({ latency = 1000 })
+    --   local messageReceived
+    --   clients[1]:onReceive(function(msg) messageReceived = msg end)
+    --   -- Client connects
+    --   server:startListening()
+    --   clients[1]:connect()
+    --   progressTime(5.05)
+    --   -- Server sends a message
+    --   server:sendAll('Test message from server')
+    --   assert.is.falsy(messageReceived)
+    --   -- Client receives the message
+    --   progressTime(1.05)
+    --   assert.is.equal('Test message from server', messageReceived)
+    -- end)
+    -- it('takes time for the server to receive a message', function()
+    --   createNetwork({ latency = 1000 })
+    --   local messageReceived
+    --   server:onReceive(function(client, msg) messageReceived = msg end)
+    --   -- Client connects
+    --   server:startListening()
+    --   clients[1]:connect()
+    --   progressTime(5.05)
+    --   -- Client sends a message
+    --   clients[1]:send('Test message from client')
+    --   assert.is.falsy(messageReceived)
+    --   -- Server receives the message
+    --   progressTime(1.05)
+    --   assert.is.equal('Test message from client', messageReceived)
+    -- end)
+  end)
+  describe('with unreliability', function()
+    -- it('the server has a chance of never receiving packets that are sent to it', function()
+    --   createNetwork({ packetLossChance = 0.5 })
+    --   local numMessagesReceived = 0
+    --   server:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+    --   server:startListening()
+    --   clients[1]:connect()
+    --   for i = 1, 100 do
+    --     clients[1]:send('Test message from client')
+    --   end
+    --   assert.True(25 < numMessagesReceived and numMessagesReceived < 75)
+    -- end)
+    -- it('the client has a chance of never receiving packets that are sent to it', function()
+    --   createNetwork({ packetLossChance = 0.5 })
+    --   local numMessagesReceived = 0
+    --   clients[1]:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+    --   server:startListening()
+    --   clients[1]:connect()
+    --   for i = 1, 100 do
+    --     server:sendAll('Test message from server')
+    --   end
+    --   assert.True(25 < numMessagesReceived and numMessagesReceived < 75)
+    -- end)
+    -- describe('with latency', function()
+    --   it('the server has a chance of never receiving packets that are sent to it', function()
+    --     createNetwork({ packetLossChance = 0.5, latency = 100 })
+    --     local numMessagesReceived = 0
+    --     server:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+    --     server:startListening()
+    --     clients[1]:connect()
+    --     progressTime(0.505)
+    --     for i = 1, 100 do
+    --       progressTime(0.105)
+    --       clients[1]:send('Test message from client')
+    --     end
+    --     progressTime(1.000)
+    --     assert.True(25 < numMessagesReceived and numMessagesReceived < 75)
+    --   end)
+    --   it('the client has a chance of never receiving packets that are sent to it', function()
+    --     createNetwork({ packetLossChance = 0.5, latency = 100 })
+    --     local numMessagesReceived = 0
+    --     clients[1]:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+    --     server:startListening()
+    --     clients[1]:connect()
+    --     progressTime(0.505)
+    --     for i = 1, 100 do
+    --       progressTime(0.105)
+    --       server:sendAll('Test message from server')
+    --     end
+    --     progressTime(1.000)
+    --     assert.True(25 < numMessagesReceived and numMessagesReceived < 75)
+    --   end)
+    -- end)
+  end)
+  describe('without any unreliability', function()
+    -- it('the server receives every packet sent to it', function()
+    --   local numMessagesReceived = 0
+    --   server:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+    --   server:startListening()
+    --   clients[1]:connect()
+    --   for i = 1, 100 do
+    --     clients[1]:send('Test message from client')
+    --   end
+    --   assert.is.equal(numMessagesReceived, 100)
+    -- end)
+    -- it('the client receives every packet sent to it', function()
+    --   local numMessagesReceived = 0
+    --   clients[1]:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+    --   server:startListening()
+    --   clients[1]:connect()
+    --   for i = 1, 100 do
+    --     server:sendAll('Test message from server')
+    --   end
+    --   assert.is.equal(numMessagesReceived, 100)
+    -- end)
+    -- describe('with latency', function()
+    --   it('the server receives every packet sent to it', function()
+    --     createNetwork({ latency = 100 })
+    --     local numMessagesReceived = 0
+    --     server:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+    --     server:startListening()
+    --     clients[1]:connect()
+    --     progressTime(0.505)
+    --     for i = 1, 100 do
+    --       progressTime(0.105)
+    --       clients[1]:send('Test message from client')
+    --     end
+    --     progressTime(1.000)
+    --     assert.is.equal(numMessagesReceived, 100)
+    --   end)
+    --   it('the client receives every packet sent to it', function()
+    --     createNetwork({ latency = 100 })
+    --     local numMessagesReceived = 0
+    --     clients[1]:onReceive(function(client, msg) numMessagesReceived = numMessagesReceived + 1 end)
+    --     server:startListening()
+    --     clients[1]:connect()
+    --     progressTime(0.505)
+    --     for i = 1, 100 do
+    --       progressTime(0.105)
+    --       server:sendAll('Test message from server')
+    --     end
+    --     progressTime(1.000)
+    --     assert.is.equal(numMessagesReceived, 100)
+    --   end)
+    -- end)
   end)
 end)
