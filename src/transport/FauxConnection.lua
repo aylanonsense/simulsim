@@ -3,9 +3,10 @@ local TransportLayer = require 'src/transport/FauxTransportLayer'
 
 local Connection = {}
 function Connection:new(params)
-  local isClient = params and params.isClient or false
-  local sendTransportLayer = params and params.sendTransportLayer
-  local receiveTransportLayer = params and params.receiveTransportLayer
+  params = params or {}
+  local isClient = params.isClient or false
+  local sendTransportLayer = params.sendTransportLayer
+  local receiveTransportLayer = params.receiveTransportLayer
 
   local conn = {
     -- Private config vars

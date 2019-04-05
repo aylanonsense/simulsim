@@ -20,7 +20,7 @@ local network
 local timeUntilChangeColor
 
 function love.load()
-  timeUntilChangeColor = 0.5
+  timeUntilChangeColor = 0.0
   -- Create a new network
   network = simulsim.createNetworkedSimulation({
     simulationDefinition = simulationDefinition,
@@ -28,9 +28,17 @@ function love.load()
   })
   -- Start the network
   network.server:startListening()
-  network.clients[1]:simulateNetworkConditions({ latency = 40 })
+  network.clients[1]:simulateNetworkConditions({
+    latency = 50,
+    latencyDeviation = 5,
+    packetLossChance = 0.05
+  })
   network.clients[1]:connect()
-  network.clients[2]:simulateNetworkConditions({ latency = 500 })
+  network.clients[2]:simulateNetworkConditions({
+    latency = 500,
+    latencyDeviation = 50,
+    packetLossChance = 0.05
+  })
   network.clients[2]:connect()
 end
 

@@ -2,16 +2,20 @@ local OffsetOptimizer = {}
 function OffsetOptimizer:new(params)
   params = params or {}
   local numFramesOfHistory = params.numFramesOfHistory or 120
+  local maximumAllowedOffset = params.maximumAllowedOffset or 1
+  local maxSequentialFramesWithoutRecords = params.maxSequentialFramesWithoutRecords or 10
 
   local optimizer = {
     -- Private config vars
     _numFramesOfHistory = numFramesOfHistory,
+    _maximumAllowedOffset = maximumAllowedOffset,
+    _maxSequentialFramesWithoutRecords = maxSequentialFramesWithoutRecords,
 
     -- Private vars
     _records = {},
 
     -- Public methods
-    -- Recorsd an offset, e.g. negative means late, positive means early
+    -- Records an offset, e.g. negative means late, positive means early
     recordOffset = function(self, offset)
       if not self._records[1] or self._records[1] > offset then
         self._records[1] = offset
@@ -27,7 +31,11 @@ function OffsetOptimizer:new(params)
       end
       minOffset = minOffset or 0
       if #self._records >= self._numFramesOfHistory or minOffset < 0 then
-        return -minOffset
+        if 0 <= minOffset and minOffset <= self._maximumAllowedOffset then
+          return 0
+        else
+          return minOffset
+        end
       else
         return 0
       end
@@ -42,13 +50,24 @@ function OffsetOptimizer:new(params)
     reset = function(self)
       self._records = {}
     end,
-    -- Only keep track of the last however many frames of frame offsets
     update = function(self, dt, df)
-      for i = self._numFramesOfHistory, 1, -1 do
-        if i <= df then
-          self._records[i] = false
+      -- If we haven't had any records for a while, we should keep the historical records around for longer
+      local numSequentialFramesWithoutRecords = 0
+      for i = 1, #self._records do
+        if not self._records[i] then
+          numSequentialFramesWithoutRecords = numSequentialFramesWithoutRecords + 1
         else
-          self._records[i] = self._records[i - df]
+          break
+        end
+      end
+      if numSequentialFramesWithoutRecords < self._maxSequentialFramesWithoutRecords  then
+        -- Get rid of the older records and make space for newer ones
+        for i = self._numFramesOfHistory, 1, -1 do
+          if i <= df then
+            self._records[i] = false
+          else
+            self._records[i] = self._records[i - df]
+          end
         end
       end
     end

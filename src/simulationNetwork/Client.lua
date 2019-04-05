@@ -14,8 +14,8 @@ function Client:new(params)
   local runner = SimulationRunner:new({
     simulation = simulation
   })
-  local receiveOptimizer = OffsetOptimizer:new()
-  local sendOptimizer = OffsetOptimizer:new()
+  local timeSyncOptimizer = OffsetOptimizer:new()
+  local latencyOptimizer = OffsetOptimizer:new()
 
   local client = {
     -- Private vars
@@ -26,8 +26,8 @@ function Client:new(params)
     _disconnectCallbacks = {},
     _simulation = simulation,
     _runner = runner,
-    _timeSyncOptimizer = receiveOptimizer,
-    _latencyOptimizer = sendOptimizer,
+    _timeSyncOptimizer = timeSyncOptimizer,
+    _latencyOptimizer = latencyOptimizer,
     _handshake = nil,
     _framesOfLatency = 0,
 
@@ -159,7 +159,7 @@ function Client:new(params)
         self._conn:send({
           type = 'connect-request',
           handshake = self._handshake
-        })
+        }, true)
       end
     end,
     _handleConnectAccept = function(self, clientId, clientData, state)
@@ -226,7 +226,7 @@ function Client:new(params)
     end,
     _recordEventOffsets = function(self, event)
       -- Record receive offsets
-      self._timeSyncOptimizer:recordOffset(event.frame - self._simulation.frame + 1)
+      self._timeSyncOptimizer:recordOffset(event.frame - self._simulation.frame - 1)
       -- Record send offsets
       if event.clientMetadata and event.clientMetadata.clientId == self.clientId and event.clientMetadata.framesOfLatency == self._framesOfLatency then
         if event.serverMetadata and event.serverMetadata.frameReceived then
