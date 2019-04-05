@@ -1,5 +1,6 @@
 -- Load dependencies
 local SimulationRunner = require 'src/simulation/SimulationRunner'
+local OffsetOptimizer = require 'src/simulationNetwork/OffsetOptimizer'
 local stringUtils = require 'src/utils/string'
 
 local Client = {}
@@ -8,10 +9,13 @@ function Client:new(params)
   local conn = params.conn
   local framesBetweenFlushes = params.framesBetweenFlushes or 0
   local simulationDefinition = params.simulationDefinition
+
   local simulation = simulationDefinition:new()
   local runner = SimulationRunner:new({
     simulation = simulation
   })
+  local receiveOptimizer = OffsetOptimizer:new()
+  local sendOptimizer = OffsetOptimizer:new()
 
   local client = {
     -- Private vars
@@ -22,7 +26,10 @@ function Client:new(params)
     _disconnectCallbacks = {},
     _simulation = simulation,
     _runner = runner,
+    _timeSyncOptimizer = receiveOptimizer,
+    _latencyOptimizer = sendOptimizer,
     _handshake = nil,
+    _framesOfLatency = 0,
 
     -- Public vars
     clientId = nil,
@@ -66,15 +73,22 @@ function Client:new(params)
     isConnecting = function(self)
       return self._status == 'connecting' or self._status == 'handshaking'
     end,
-    fireEvent = function(self, eventType, eventData, params)
+    fireEvent = function(self, eventType, eventData, params, isInputEvent)
       local reliable = params and params.reliable
       if self._status == 'connected' then
         -- Create a new event
         local event = {
           id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
-          frame = self._simulation.frame + 1, -- TODO + latency
+          frame = self._simulation.frame + self._framesOfLatency + 1,
           type = eventType,
-          data = eventData
+          data = eventData,
+          isInputEvent = isInputEvent or false,
+          clientMetadata = {
+            clientId = self.clientId,
+            frameSent = self._simulation.frame,
+            expectedFrameReceived = self._simulation.frame + self._framesOfLatency,
+            framesOfLatency = self._framesOfLatency
+          }
         }
         -- Send the event to the server
         self._conn:buffer({
@@ -90,24 +104,7 @@ function Client:new(params)
       end
     end,
     setInputs = function(self, inputs, params)
-      local reliable = params and params.reliable
-      if self._status == 'connected' then
-        -- Create a new event
-        local event = {
-          id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
-          frame = self._simulation.frame + 1, -- TODO + latency
-          type = 'set-inputs',
-          data = inputs,
-          isInputEvent = true
-        }
-        -- Send the event to the server
-        self._conn:buffer({
-          type = 'event',
-          event = event
-        }, reliable)
-        -- Return the event
-        return event
-      end
+      self:fireEvent('set-inputs', inputs, params, true)
     end,
     flush = function(self, reliable)
       if self._status == 'connected' then
@@ -119,9 +116,33 @@ function Client:new(params)
     end,
     update = function(self, dt)
       -- Update the simulation (via the simulation runner)
-      local numFrames = self._runner:update(dt)
+      local df = self._runner:update(dt)
+      -- Update the timing and latency optimizers
+      self._timeSyncOptimizer:update(dt, df)
+      self._latencyOptimizer:update(dt, df)
+      -- Rewind or fast forward the simulation to get it synced with the server
+      local timeAdjustment = self._timeSyncOptimizer:getRecommendedAdjustment()
+      if timeAdjustment ~= 0 then
+        -- TODO handle excessively large time adjustments
+        if timeAdjustment > 0 then
+          self._runner:fastForward(timeAdjustment)
+        elseif timeAdjustment < 0 then
+          self._runner:rewind(-timeAdjustment)
+        end
+        self._timeSyncOptimizer:reset()
+        local latencyAdjustment = -math.min(self._framesOfLatency, timeAdjustment)
+        self._framesOfLatency = self._framesOfLatency + latencyAdjustment
+        self._latencyOptimizer:applyAdjustment(latencyAdjustment)
+      end
+      -- Adjust latency to ensure messages are arriving on time server-side
+      local latencyAdjustment = self._latencyOptimizer:getRecommendedAdjustment()
+      if latencyAdjustment ~= 0 then
+        -- TODO handle excessively large latency adjustments
+        self._framesOfLatency = self._framesOfLatency + latencyAdjustment
+        self._latencyOptimizer:reset()
+      end
       -- Flush the client's messages every so often
-      self.framesUntilNextFlush = self.framesUntilNextFlush - numFrames
+      self.framesUntilNextFlush = self.framesUntilNextFlush - df
       if self.framesUntilNextFlush <= 0 then
         self.framesUntilNextFlush = self.framesBetweenFlushes
         self:flush()
@@ -143,6 +164,7 @@ function Client:new(params)
         self._status = 'connected'
         self.clientId = clientId
         self.data = clientData or {}
+        self._framesOfLatency = math.ceil(self._conn:getLatency() / 60)
         -- Set the initial state of the client-side simulation
         self._runner:reset()
         self._runner:setState(state)
@@ -183,11 +205,13 @@ function Client:new(params)
     end,
     _handleReceiveEvent = function(self, event)
       if self._status == 'connected' then
+        self:_recordEventOffsets(event)
         self:_applyEvent(event)
       end
     end,
     _handleRejectEvent = function(self, event)
       if self._status == 'connected' then
+        self:_recordEventOffsets(event)
         self:_unapplyEvent(event)
       end
     end,
@@ -196,6 +220,16 @@ function Client:new(params)
     end,
     _unapplyEvent = function(self, event)
       return self._runner:unapplyEvent(event)
+    end,
+    _recordEventOffsets = function(self, event)
+      -- Record receive offsets
+      self._timeSyncOptimizer:recordOffset(event.frame - self._simulation.frame + 1)
+      -- Record send offsets
+      if event.clientMetadata and event.clientMetadata.clientId == self.clientId and event.clientMetadata.framesOfLatency == self._framesOfLatency then
+        if event.serverMetadata and event.serverMetadata.frameReceived then
+          self._latencyOptimizer:recordOffset(event.clientMetadata.expectedFrameReceived - event.serverMetadata.frameReceived)
+        end
+      end
     end,
 
     -- Callback methods

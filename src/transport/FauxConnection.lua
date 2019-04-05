@@ -20,6 +20,8 @@ function Connection:new(params)
     _heldMessages = {},
     _connectCallbacks = {},
     _disconnectCallbacks = {},
+    _sendCallbacks = {},
+    _flushCallbacks = {},
     _receiveCallbacks = {},
 
     -- Public methods
@@ -69,9 +71,17 @@ function Connection:new(params)
     end,
     -- Sends all buffered messages that haven't been sent yet
     flush = function(self, reliable)
-      if self._status == 'connected' then
+      if self._status == 'connected' and #self._bufferedMessages > 0 then
+        for _, callback in ipairs(self._flushCallbacks) do
+          callback(messagesToSend)
+        end
         local messagesToSend = self._bufferedMessages
         self._bufferedMessages = {}
+        for _, message in ipairs(messagesToSend) do
+          for _, callback in ipairs(self._sendCallbacks) do
+            callback(message)
+          end
+        end
         -- Send the messages
         self._sendTransportLayer:send({
           type = 'messages',
@@ -79,6 +89,12 @@ function Connection:new(params)
         }, reliable or self._flushReliably)
         self._flushReliably = false
       end
+    end,
+    -- Returns the total roundtrip time for messages in milliseconds
+    getLatency = function(self)
+      -- Cheating! Implement some proper pinging please
+      return self._sendTransportLayer._latency + self._sendTransportLayer._latencyDeviation +
+        self._receiveTransportLayer._latency + self._receiveTransportLayer._latencyDeviation
     end,
 
     -- Private methods
@@ -126,6 +142,12 @@ function Connection:new(params)
     end,
     onDisconnect = function(self, callback)
       table.insert(self._disconnectCallbacks, callback)
+    end,
+    onSend = function(self, callback)
+      table.insert(self._sendCallbacks, callback)
+    end,
+    onFlush = function(self, callback)
+      table.insert(self._flushCallbacks, callback)
     end,
     onReceive = function(self, callback)
       table.insert(self._receiveCallbacks, callback)

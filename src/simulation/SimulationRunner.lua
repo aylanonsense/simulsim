@@ -88,6 +88,18 @@ function SimulationRunner:new(params)
       self._stateHistory = {}
       self._eventHistory = {}
     end,
+    rewind = function(self, numFrames)
+      if self:_rewindToFrame(self._simulation.frame - numFrames) then
+        self:_invalidateStateHistoryOnOrAfterFrame(self._simulation.frame + 1)
+        return true
+      else
+        return false
+      end
+    end,
+    fastForward = function(self, numFrames)
+      self:_fastForwardToFrame(self._simulation.frame + numFrames, true)
+      return true
+    end,
 
     -- Private methods
     -- Set the simulation to the state it was in after the given frame

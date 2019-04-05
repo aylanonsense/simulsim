@@ -366,6 +366,10 @@ function Server:new(params)
       end
     end,
     _handleReceiveEvent = function(self, client, event, params)
+      -- Add some metadata onto the event recording the fact that it was received
+      event.serverMetadata = {
+        frameReceived = self._simulation.frame
+      }
       local eventApplied = false
       -- TODO reject if too far in the past
       -- TODO update frame if in the past and adjusting is allowed
