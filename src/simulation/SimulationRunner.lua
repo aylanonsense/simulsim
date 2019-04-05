@@ -169,7 +169,7 @@ function SimulationRunner:new(params)
           self._simulation.inputs[event.clientId] = event.data
         else
           table.insert(nonInputEvents, event)
-          self._simulation:handleEvent(event)
+          self._simulation:handleEvent(event.type, event.data)
         end
       end
       -- Update the simulation

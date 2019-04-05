@@ -148,6 +148,9 @@ function Client:new(params)
         self:flush()
       end
     end,
+    simulateNetworkConditions = function(self, params)
+      self._conn:setNetworkConditions(params)
+    end,
 
     -- Private methods
     _handleConnect = function(self)

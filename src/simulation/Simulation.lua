@@ -99,7 +99,9 @@ function Simulation:new(params)
       self.inputs = {}
       self.data = {}
       self.entities = {}
-      self:setState(self._initialState)
+      if self._initialState then
+        self:setState(self._initialState)
+      end
     end,
 
     -- Private methods
@@ -128,7 +130,7 @@ function Simulation:new(params)
 
     -- Methods to override
     update = function(self, dt, inputs, events, isTopFrame) end,
-    handleEvent = function(self, event) end
+    handleEvent = function(self, eventType, eventData) end
   }
 
   -- Set the simulation's initial state

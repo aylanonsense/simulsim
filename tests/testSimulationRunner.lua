@@ -12,9 +12,9 @@ describe('simulation runner', function()
         fruits = { 'apple' }
       }
     },
-    handleEvent = function(self, event)
-      if event.type == 'add-fruit' then
-        table.insert(self.data.fruits, event.fruit)
+    handleEvent = function(self, eventType, eventData)
+      if eventType == 'add-fruit' then
+        table.insert(self.data.fruits, eventData.fruit)
       end
     end
   })
@@ -69,7 +69,9 @@ describe('simulation runner', function()
       runner:applyEvent({
         frame = 45,
         type = 'add-fruit',
-        fruit = 'mango'
+        data = {
+          fruit = 'mango'
+        }
       })
       assert.is.same({ 'apple', 'mango' }, sim.data.fruits)
       runner:setState({
@@ -88,7 +90,9 @@ describe('simulation runner', function()
       runner:applyEvent({
         frame = 90,
         type = 'add-fruit',
-        fruit = 'mango'
+        data = {
+          fruit = 'mango'
+        }
       })
       runner:setState({
         time = 1.00,
@@ -118,7 +122,9 @@ describe('simulation runner', function()
       assert.False(runner:applyEvent({
         frame = 45,
         type = 'add-fruit',
-        fruit = 'mango'
+        data = {
+          fruit = 'mango'
+        }
       }))
       assert.is.same({ 'cranberry' }, sim.data.fruits)
     end)
@@ -129,13 +135,17 @@ describe('simulation runner', function()
         id = 'some-event',
         frame = 65,
         type = 'add-fruit',
-        fruit = 'orange'
+        data = {
+          fruit = 'orange'
+        }
       })
       runner:applyEvent({
         id = 'some-other-event',
         frame = 80,
         type = 'add-fruit',
-        fruit = 'banana'
+        data = {
+          fruit = 'banana'
+        }
       })
       assert.is.same({ 'apple' }, sim.data.fruits)
       progressFrames(60)
@@ -145,12 +155,16 @@ describe('simulation runner', function()
       runner:applyEvent({
         frame = 30,
         type = 'add-fruit',
-        fruit = 'orange'
+        data = {
+          fruit = 'orange'
+        }
       })
       runner:applyEvent({
         frame = 50,
         type = 'add-fruit',
-        fruit = 'banana'
+        data = {
+          fruit = 'banana'
+        }
       })
       assert.is.same({ 'apple', 'orange', 'banana' }, sim.data.fruits)
     end)
@@ -158,21 +172,27 @@ describe('simulation runner', function()
       assert.True(runner:applyEvent({
         frame = 100,
         type = 'add-fruit',
-        fruit = 'blueberry'
+        data = {
+          fruit = 'blueberry'
+        }
       }))
     end)
     it('returns true if a past event was applied', function()
       assert.True(runner:applyEvent({
         frame = 30,
         type = 'add-fruit',
-        fruit = 'blueberry'
+        data = {
+          fruit = 'blueberry'
+        }
       }))
     end)
     it('returns false if an event too far in the past could not be applied', function()
       assert.False(runner:applyEvent({
         frame = 29,
         type = 'add-fruit',
-        fruit = 'blueberry'
+        data = {
+          fruit = 'blueberry'
+        }
       }))
     end)
     it('calls the simulation\'s handleEvent() method for each applied event', function()
@@ -180,7 +200,9 @@ describe('simulation runner', function()
       runner:applyEvent({
         frame = 65,
         type = 'add-fruit',
-        fruit = 'blueberry'
+        data = {
+          fruit = 'blueberry'
+        }
       })
       progressFrames(5)
       assert.spy(sim.handleEvent).was.called(1)
@@ -237,7 +259,9 @@ describe('simulation runner', function()
         id = 'some-event-id',
         frame = 40,
         type = 'add-fruit',
-        fruit = 'orange'
+        data = {
+          fruit = 'orange'
+        }
       })
       assert.True(runner:unapplyEvent('some-event-id'))
     end)
@@ -246,7 +270,9 @@ describe('simulation runner', function()
         id = 'some-event-id',
         frame = 40,
         type = 'add-fruit',
-        fruit = 'orange'
+        data = {
+          fruit = 'orange'
+        }
       })
       assert.False(runner:unapplyEvent('some-event-id-2'))
     end)
@@ -255,13 +281,17 @@ describe('simulation runner', function()
         id = 'some-event-id',
         frame = 40,
         type = 'add-fruit',
-        fruit = 'orange'
+        data = {
+          fruit = 'orange'
+        }
       })
       runner:applyEvent({
         id = 'some-other-event-id',
         frame = 45,
         type = 'add-fruit',
-        fruit = 'banana'
+        data = {
+          fruit = 'banana'
+        }
       })
       assert.is.same({ 'apple', 'orange', 'banana' }, sim.data.fruits)
       runner:unapplyEvent('some-event-id')

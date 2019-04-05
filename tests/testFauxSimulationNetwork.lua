@@ -12,9 +12,9 @@ describe('faux simulation network', function()
         fruits = { 'apple' }
       }
     },
-    handleEvent = function(self, event)
-      if event.type == 'add-fruit' then
-        table.insert(self.data.fruits, event.data.fruit)
+    handleEvent = function(self, eventType, eventData)
+      if eventType == 'add-fruit' then
+        table.insert(self.data.fruits, eventData.fruit)
       end
     end
   })

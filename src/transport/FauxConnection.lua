@@ -96,6 +96,26 @@ function Connection:new(params)
       return self._sendTransportLayer._latency + self._sendTransportLayer._latencyDeviation +
         self._receiveTransportLayer._latency + self._receiveTransportLayer._latencyDeviation
     end,
+    setNetworkConditions = function(self, params)
+      params = params or {}
+      local sendParams = {}
+      local receiveParams = {}
+      -- Divide latency between the send transport layer and the receive transport layer
+      if params.latency then
+        sendParams.latency = params.latency / 2
+        receiveParams.latency = params.latency / 2
+      end
+      if params.latencyDeviation then
+        sendParams.latencyDeviation = params.latencyDeviation / 2
+        receiveParams.latencyDeviation = params.latencyDeviation / 2
+      end
+      if params.packetLossChance then
+        sendParams.packetLossChance = params.packetLossChance
+        receiveParams.packetLossChance = params.packetLossChance
+      end
+      self._sendTransportLayer:setNetworkConditions(sendParams)
+      self._receiveTransportLayer:setNetworkConditions(receiveParams)
+    end,
 
     -- Private methods
     _handleConnect = function(self)

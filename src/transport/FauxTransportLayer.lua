@@ -1,10 +1,15 @@
 local TransportLayer = {}
 function TransportLayer:new(params)
+  params = params or {}
+  local latency = params.latency or 0
+  local latencyDeviation = params.latencyDeviation or 0
+  local packetLossChance = params.packetLossChance or 0
+
   local transportLayer = {
     -- Private config vars
-    _latency = params and params.latency or 0,
-    _latencyDeviation = params and params.latencyDeviation or 0,
-    _packetLossChance = params and params.packetLossChance or 0,
+    _latency = latency,
+    _latencyDeviation = latencyDeviation,
+    _packetLossChance = packetLossChance,
 
     -- Private vars
     _packets = {},
@@ -38,6 +43,18 @@ function TransportLayer:new(params)
       -- Receive those messages
       for i = #packetsToSend, 1, -1 do
         self:_handleReceive(packetsToSend[i].message, packetsToSend[i].unlosable)
+      end
+    end,
+    setNetworkConditions = function(self, params)
+      params = params or {}
+      if params.latency then
+        self._latency = params.latency
+      end
+      if params.latencyDeviation then
+        self._latencyDeviation = params.latencyDeviation
+      end
+      if params.packetLossChance then
+        self._packetLossChance = params.packetLossChance
       end
     end,
 
