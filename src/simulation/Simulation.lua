@@ -13,7 +13,6 @@ function Simulation:new(params)
     _initialState = initialState,
 
     -- Public vars
-    time = 0.00,
     frame = 0,
     nextEntityId = 1,
     inputs = {},
@@ -24,7 +23,6 @@ function Simulation:new(params)
     -- Gets the current state of the simulation as a simple table
     getState = function(self)
       local state = {
-        time = self.time,
         frame = self.frame,
         nextEntityId = self.nextEntityId,
         inputs = tableUtils.cloneTable(self.inputs),
@@ -38,7 +36,6 @@ function Simulation:new(params)
     end,
     -- Sets the current state of the simulation
     setState = function(self, state)
-      self.time = state.time or self.time
       self.frame = state.frame or self.frame
       self.nextEntityId = state.nextEntityId or self.nextEntityId
       if state.inputs then
@@ -93,7 +90,6 @@ function Simulation:new(params)
       end
     end,
     reset = function(self)
-      self.time = 0.00
       self.frame = 0
       self.nextEntityId = 1
       self.inputs = {}

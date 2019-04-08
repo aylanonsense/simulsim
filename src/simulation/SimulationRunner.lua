@@ -159,7 +159,6 @@ function SimulationRunner:new(params)
       local dt = 1 / 60
       -- Advance the simulation's time
       self._simulation.frame = self._simulation.frame + 1
-      self._simulation.time = self._simulation.time + dt
       -- Get the events that take place on this frame
       local events = self:_getEventsAtFrame(self._simulation.frame)
       -- Input-related events are automatically applied to the simulation's inputs

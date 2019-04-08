@@ -8,6 +8,7 @@ function Client:new(params)
   params = params or {}
   local conn = params.conn
   local framesBetweenFlushes = params.framesBetweenFlushes or 0
+  local framesBetweenPings = params.framesBetweenPings or 15
   local simulationDefinition = params.simulationDefinition
 
   local simulation = simulationDefinition:new()
@@ -34,6 +35,8 @@ function Client:new(params)
     -- Public vars
     clientId = nil,
     data = {},
+    framesBetweenPings = framesBetweenPings,
+    framesUntilNextPing = framesBetweenPings,
     framesBetweenFlushes = framesBetweenFlushes,
     framesUntilNextFlush = framesBetweenFlushes,
 
@@ -82,21 +85,16 @@ function Client:new(params)
           frame = self._simulation.frame + self._framesOfLatency + 1,
           type = eventType,
           data = eventData,
-          isInputEvent = isInputEvent or false,
-          clientMetadata = {
-            clientId = self.clientId,
-            frameSent = self._simulation.frame,
-            expectedFrameReceived = self._simulation.frame + self._framesOfLatency,
-            framesOfLatency = self._framesOfLatency
-          }
+          isInputEvent = isInputEvent or false
         }
+        self:_addClientMetadata(event)
         -- Send the event to the server
         self._conn:buffer({
           type = 'event',
           event = event
         }, reliable)
         -- Send immediately if we're not buffering
-        if self.framesBetweenFlushes == 0 then
+        if self.framesBetweenFlushes <= 0 then
           self:flush()
         end
         -- Return the event
@@ -138,8 +136,14 @@ function Client:new(params)
       local latencyAdjustment = self._latencyOptimizer:getRecommendedAdjustment()
       if latencyAdjustment ~= 0 then
         -- TODO handle excessively large latency adjustments
-        self._framesOfLatency = self._framesOfLatency + latencyAdjustment
+        self._framesOfLatency = self._framesOfLatency - latencyAdjustment
         self._latencyOptimizer:reset()
+      end
+      -- Send a lazy ping every so often to guage latency accuracy
+      self.framesUntilNextPing = self.framesUntilNextPing - df
+      if self.framesUntilNextPing <= 0 then
+        self.framesUntilNextPing = self.framesBetweenPings
+        self:_ping()
       end
       -- Flush the client's messages every so often
       self.framesUntilNextFlush = self.framesUntilNextFlush - df
@@ -150,6 +154,9 @@ function Client:new(params)
     end,
     simulateNetworkConditions = function(self, params)
       self._conn:setNetworkConditions(params)
+    end,
+    getFramesOfLatency = function(self)
+      return self._framesOfLatency
     end,
 
     -- Private methods
@@ -167,7 +174,7 @@ function Client:new(params)
         self._status = 'connected'
         self.clientId = clientId
         self.data = clientData or {}
-        self._framesOfLatency = math.ceil(self._conn:getLatency() / 60)
+        self._framesOfLatency = math.ceil(60 * self._conn:getLatency() / 1000)
         -- Set the initial state of the client-side simulation
         self._runner:reset()
         self._runner:setState(state)
@@ -208,14 +215,22 @@ function Client:new(params)
     end,
     _handleReceiveEvent = function(self, event)
       if self._status == 'connected' then
-        self:_recordEventOffsets(event)
+        self:_recordTimeSyncOffset(event)
+        self:_recordLatencyOffset(event)
         self:_applyEvent(event)
       end
     end,
     _handleRejectEvent = function(self, event)
       if self._status == 'connected' then
-        self:_recordEventOffsets(event)
+        self:_recordTimeSyncOffset(event)
+        self:_recordLatencyOffset(event)
         self:_unapplyEvent(event)
+      end
+    end,
+    _handlePingResponse = function(self, ping)
+      if self._status == 'connected' then
+        self:_recordTimeSyncOffset(ping)
+        self:_recordLatencyOffset(ping)
       end
     end,
     _applyEvent = function(self, event)
@@ -224,13 +239,36 @@ function Client:new(params)
     _unapplyEvent = function(self, event)
       return self._runner:unapplyEvent(event)
     end,
-    _recordEventOffsets = function(self, event)
-      -- Record receive offsets
-      self._timeSyncOptimizer:recordOffset(event.frame - self._simulation.frame - 1)
-      -- Record send offsets
-      if event.clientMetadata and event.clientMetadata.clientId == self.clientId and event.clientMetadata.framesOfLatency == self._framesOfLatency then
-        if event.serverMetadata and event.serverMetadata.frameReceived then
-          self._latencyOptimizer:recordOffset(event.clientMetadata.expectedFrameReceived - event.serverMetadata.frameReceived)
+    _ping = function(self, params)
+      local reliable = params and params.reliable
+      if self._status == 'connected' then
+        -- Send a ping to the server, no need to flush immediately since we want the buffer time to be accounted for
+        self._conn:buffer({
+          type = 'ping',
+          ping = self:_addClientMetadata({})
+        }, reliable)
+      end
+      -- But flush immediately if we have no auto-flushing
+      if self.framesBetweenFlushes <= 0 then
+        self:flush()
+      end
+    end,
+    _addClientMetadata = function(self, obj)
+      obj.clientMetadata = {
+        clientId = self.clientId,
+        frameSent = self._simulation.frame,
+        expectedFrameReceived = self._simulation.frame + self._framesOfLatency,
+        framesOfLatency = self._framesOfLatency
+      }
+      return obj
+    end,
+    _recordTimeSyncOffset = function(self, msg)
+      self._timeSyncOptimizer:recordOffset(msg.frame - self._simulation.frame - 1)
+    end,
+    _recordLatencyOffset = function(self, msg)
+      if msg.clientMetadata and msg.clientMetadata.clientId == self.clientId and msg.clientMetadata.framesOfLatency == self._framesOfLatency then
+        if msg.serverMetadata and msg.serverMetadata.frameReceived then
+          self._latencyOptimizer:recordOffset(msg.clientMetadata.expectedFrameReceived - msg.serverMetadata.frameReceived)
         end
       end
     end,
@@ -265,6 +303,8 @@ function Client:new(params)
       client:_handleReceiveEvent(msg.event)
     elseif msg.type == 'reject-event' then
       client:_handleRejectEvent(msg.event)
+    elseif msg.type == 'ping-response' then
+      client:_handlePingResponse(msg.ping)
     end
   end)
 

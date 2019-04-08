@@ -15,6 +15,8 @@ function Client:new(params)
     _connectRequestCallbacks = {},
     _disconnectCallbacks = {},
     _receiveEventCallbacks = {},
+    _receivePingCallbacks = {},
+    _framesOfLatency = 0,
 
     -- Public vars
     clientId = clientId,
@@ -103,6 +105,18 @@ function Client:new(params)
         end
       end
     end,
+    sendPingResponse = function(self, ping, params)
+      local reliable = params and params.reliable
+      if self._status == 'connected' then
+        self._conn:buffer({
+          type = 'ping-response',
+          ping = ping
+        }, reliable)
+        if self.framesBetweenFlushes == 0 then
+          self:flush()
+        end
+      end
+    end,
     flush = function(self, params)
       local reliable = params and params.reliable
       if self._status == 'connected' then
@@ -116,6 +130,9 @@ function Client:new(params)
         self.framesUntilNextFlush = self.framesBetweenFlushes
         self:flush()
       end
+    end,
+    getFramesOfLatency = function(self)
+      return self._framesOfLatency
     end,
 
     -- Private methods
@@ -157,6 +174,14 @@ function Client:new(params)
         end
       end
     end,
+    _handlePingEvent = function(self, ping)
+      if self._status == 'connected' then
+        self._framesOfLatency = ping.clientMetadata.framesOfLatency
+        for _, callback in ipairs(self._receivePingCallbacks) do
+          callback(ping)
+        end
+      end
+    end,
 
     -- Callback methods
     onConnectRequest = function(self, callback)
@@ -168,6 +193,9 @@ function Client:new(params)
     onReceiveEvent = function(self, callback)
       table.insert(self._receiveEventCallbacks, callback)
     end,
+    onReceivePing = function(self, callback)
+      table.insert(self._receivePingCallbacks, callback)
+    end
   }
 
   -- Bind events
@@ -181,6 +209,8 @@ function Client:new(params)
       client:_handleClientDisconnectRequest(msg.reason)
     elseif msg.type == 'event' then
       client:_handleReceiveEvent(msg.event)
+    elseif msg.type == 'ping' then
+      client:_handlePingEvent(msg.ping)
     end
   end)
 
@@ -307,6 +337,9 @@ function Server:new(params)
               client:onReceiveEvent(function(event)
                 self:_handleReceiveEvent(client, event)
               end)
+              client:onReceivePing(function(ping)
+                self:_handleReceivePing(client, ping)
+              end)
               -- Trigger the connect callback
               for _, callback in ipairs(self._connectCallbacks) do
                 callback(client)
@@ -365,7 +398,7 @@ function Server:new(params)
         callback(client, reason or 'Server forced disconnect')
       end
     end,
-    _handleReceiveEvent = function(self, client, event, params)
+    _handleReceiveEvent = function(self, client, event)
       -- Add some metadata onto the event recording the fact that it was received
       event.serverMetadata = {
         frameReceived = self._simulation.frame
@@ -379,8 +412,15 @@ function Server:new(params)
       end
       if not eventApplied then
         -- Let the client know that their event was rejected or wasn't able to be applied
-        client:rejectEvent(event, params)
+        client:rejectEvent(event)
       end
+    end,
+    _handleReceivePing = function(self, client, ping)
+      ping.frame = self._simulation.frame
+      ping.serverMetadata = {
+        frameReceived = self._simulation.frame
+      }
+      client:sendPingResponse(ping)
     end,
     _applyEvent = function(self, event, params)
       -- Apply the event server-side

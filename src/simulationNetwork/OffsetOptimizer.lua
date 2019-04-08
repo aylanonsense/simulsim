@@ -1,13 +1,15 @@
 local OffsetOptimizer = {}
 function OffsetOptimizer:new(params)
   params = params or {}
-  local numFramesOfHistory = params.numFramesOfHistory or 120
+  local numFramesOfHistory = params.numFramesOfHistory or 150
+  local minimumAllowedOffset = params.minimumAllowedOffset or 0
   local maximumAllowedOffset = params.maximumAllowedOffset or 1
-  local maxSequentialFramesWithoutRecords = params.maxSequentialFramesWithoutRecords or 10
+  local maxSequentialFramesWithoutRecords = params.maxSequentialFramesWithoutRecords or 15
 
   local optimizer = {
     -- Private config vars
     _numFramesOfHistory = numFramesOfHistory,
+    _minimumAllowedOffset = minimumAllowedOffset,
     _maximumAllowedOffset = maximumAllowedOffset,
     _maxSequentialFramesWithoutRecords = maxSequentialFramesWithoutRecords,
 
@@ -30,8 +32,8 @@ function OffsetOptimizer:new(params)
         end
       end
       minOffset = minOffset or 0
-      if #self._records >= self._numFramesOfHistory or minOffset < 0 then
-        if 0 <= minOffset and minOffset <= self._maximumAllowedOffset then
+      if #self._records >= self._numFramesOfHistory or minOffset < self._minimumAllowedOffset then
+        if self._minimumAllowedOffset <= minOffset and minOffset <= self._maximumAllowedOffset then
           return 0
         else
           return minOffset
