@@ -15,6 +15,13 @@ local simulationDefinition = simulsim.defineSimulation({
         height = 20,
         color = eventData.color
       })
+    elseif eventType == 'change-player-color' then
+      for _, entity in ipairs(self.entities) do
+        if entity.clientId == eventData.clientId then
+          entity.color = eventData.color
+          break
+        end
+      end
     end
   end,
   update = function(self, dt)
@@ -48,13 +55,13 @@ function love.load()
   network.clients[1]:simulateNetworkConditions({
     latency = 100,
     latencyDeviation = 5,
-    packetLossChance = 0.00
+    packetLossChance = 0.0
   })
   network.clients[1]:connect()
   network.clients[2]:simulateNetworkConditions({
     latency = 1000,
     latencyDeviation = 50,
-    packetLossChance = 0.00
+    packetLossChance = 0.0
   })
   network.clients[2]:connect()
 end
@@ -81,6 +88,20 @@ function love.draw()
   drawSimulation(network.server:getSimulation(), nil, 110, 10, 200, 200)
   drawSimulation(network.clients[1]:getSimulation(), network.clients[1], 10, 220, 200, 200)
   drawSimulation(network.clients[2]:getSimulation(), network.clients[2], 220, 220, 200, 200)
+end
+
+function love.keypressed(key)
+  if key == 'lshift' then
+    network.clients[1]:fireEvent('change-player-color', {
+      clientId = network.clients[1].clientId,
+      color = { math.random(), math.random(), math.random() }
+    })
+  elseif key == 'rshift' then
+    network.clients[2]:fireEvent('change-player-color', {
+      clientId = network.clients[2].clientId,
+      color = { math.random(), math.random(), math.random() }
+    })
+  end
 end
 
 function drawSimulation(sim, client, x, y, width, height)

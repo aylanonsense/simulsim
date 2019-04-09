@@ -1,3 +1,4 @@
+local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
 
 local SimulationRunner = {}
@@ -9,7 +10,6 @@ function SimulationRunner:new(params)
 
   return {
     -- Private config vars
-    _framesOfHistory = framesOfHistory,
     _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
 
     -- Private vars
@@ -17,41 +17,69 @@ function SimulationRunner:new(params)
     _stateHistory = {},
     _eventHistory = {},
 
+    -- Public vars
+    framesOfHistory = framesOfHistory,
+
     -- Public methods
     getSimulation = function(self)
       return self._simulation
     end,
     -- Adds an event to be applied on the given frame, which may trigger a rewind
-    applyEvent = function(self, event)
-      -- See if there already exists an event with that id
-      local replacedEvent = false
-      for i = #self._eventHistory, 1, -1 do
-        if self._eventHistory[i].id == event.id then
-          self._eventHistory[i] = event
-          replacedEvent = true
-          break
-        end
-      end
-      -- Otherwise just insert it
-      if not replacedEvent then
-        table.insert(self._eventHistory, event)
-      end
+    applyEvent = function(self, event, params)
+      params = params or {}
+      local preserveFrame = params.preserveFrame
+      local framesUntilAutoUnapply = params.framesUntilAutoUnapply
       -- If the event occurred too far in the past, there's not much we can do about it
-      if event.frame < self._simulation.frame - self._framesOfHistory then
+      local maxAllowedAge = self.framesOfHistory
+      if framesUntilAutoUnapply and framesUntilAutoUnapply < maxAllowedAge then
+        maxAllowedAge = framesUntilAutoUnapply
+      end
+      if event.frame < self._simulation.frame - maxAllowedAge then
         return false
       -- If the event takes place in the past, regenerate the state history
-      elseif event.frame <= self._simulation.frame then
-        if not self:_regenerateStateHistoryOnOrAfterFrame(event.frame) then
-          return false
+      else
+        local frameToRegenerateFrom = event.frame
+        -- Create a wrapper for the event with extra metadata
+        local record = {
+          event = event,
+          preserveFrame = preserveFrame
+        }
+        if framesUntilAutoUnapply then
+          record.autoUnapplyFrame = event.frame + framesUntilAutoUnapply
+        end
+        -- See if there already exists an event with that id
+        local replacedEvent = false
+        for i = #self._eventHistory, 1, -1 do
+          if self._eventHistory[i].event.id == event.id then
+            if self._eventHistory[i].event.frame < frameToRegenerateFrom then
+              frameToRegenerateFrom = self._eventHistory[i].event.frame
+            end
+            if self._eventHistory[i].preserveFrame then
+              record.event = tableUtils.cloneTable(record.event)
+              record.event.frame = self._eventHistory[i].event.frame
+            end
+            self._eventHistory[i] = record
+            replacedEvent = true
+            break
+          end
+        end
+        -- Otherwise just insert it
+        if not replacedEvent then
+          table.insert(self._eventHistory, record)
+        end
+        -- And regenerate states that are now invalid
+        if frameToRegenerateFrom <= self._simulation.frame then
+          return self:_regenerateStateHistoryOnOrAfterFrame(frameToRegenerateFrom)
+        else
+          return true
         end
       end
-      return true
     end,
     -- Cancels an event that was applied prior
     unapplyEvent = function(self, eventId)
       -- Search for the event
       for i = #self._eventHistory, 1, -1 do
-        local event = self._eventHistory[i]
+        local event = self._eventHistory[i].event
         if event.id == eventId then
           -- Remove the event
           table.remove(self._eventHistory, i)
@@ -70,7 +98,7 @@ function SimulationRunner:new(params)
       self._simulation:setState(state)
       -- Only future events are still valid
       for i = #self._eventHistory, 1, -1 do
-        if self._eventHistory[i].frame <= self._simulation.frame then
+        if self._eventHistory[i].event.frame <= self._simulation.frame then
           table.remove(self._eventHistory, i)
         end
       end
@@ -82,6 +110,7 @@ function SimulationRunner:new(params)
       -- TODO take dt into account
       self:_moveSimulationForwardOneFrame(true, true)
       self:_removeOldHistory()
+      self:_autoUnapplyEvents()
       -- Return the number of frames that have been advanced
       return 1
     end,
@@ -185,9 +214,9 @@ function SimulationRunner:new(params)
     -- Get all events that occurred at the given frame
     _getEventsAtFrame = function(self, frame)
       local events = {}
-      for _, event in ipairs(self._eventHistory) do
-        if event.frame == frame then
-          table.insert(events, event)
+      for _, record in ipairs(self._eventHistory) do
+        if record.event.frame == frame then
+          table.insert(events, record.event)
         end
       end
       return events
@@ -196,15 +225,34 @@ function SimulationRunner:new(params)
     _removeOldHistory = function(self)
       -- Remove old state history
       for i = #self._stateHistory, 1, -1 do
-        if self._stateHistory[i].frame < self._simulation.frame - self._framesOfHistory - self._framesBetweenStateSnapshots then
+        if self._stateHistory[i].frame < self._simulation.frame - self.framesOfHistory - self._framesBetweenStateSnapshots then
           table.remove(self._stateHistory, i)
         end
       end
       -- Remove old event history
       for i = #self._eventHistory, 1, -1 do
-        if self._eventHistory[i].frame < self._simulation.frame - self._framesOfHistory - self._framesBetweenStateSnapshots then
+        if self._eventHistory[i].event.frame < self._simulation.frame - self.framesOfHistory - self._framesBetweenStateSnapshots then
           table.remove(self._eventHistory, i)
         end
+      end
+    end,
+    -- Remove any events that should be automatically unapplied
+    _autoUnapplyEvents = function(self)
+      -- Find any events that need to be automatically unapplied
+      local frameToRegenerateFrom = nil
+      for i = #self._eventHistory, 1, -1 do
+        local record = self._eventHistory[i]
+        if record.autoUnapplyFrame and record.autoUnapplyFrame <= self._simulation.frame then
+          -- Remove the event
+          table.remove(self._eventHistory, i)
+          if not frameToRegenerateFrom or record.event.frame < frameToRegenerateFrom then
+            frameToRegenerateFrom = record.event.frame
+          end
+        end
+      end
+      -- Regenerate state history from the event furthest in the past
+      if frameToRegenerateFrom then
+        self:_regenerateStateHistoryOnOrAfterFrame(frameToRegenerateFrom)
       end
     end
   }
