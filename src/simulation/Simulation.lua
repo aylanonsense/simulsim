@@ -11,10 +11,11 @@ function Simulation:new(params)
   local simulation = {
     -- Private vars
     _initialState = initialState,
+    _entityIdPrefix = '',
+    _nextEntityId = 1,
 
     -- Public vars
     frame = 0,
-    nextEntityId = 1,
     inputs = {},
     data = {},
     entities = {},
@@ -24,7 +25,6 @@ function Simulation:new(params)
     getState = function(self)
       local state = {
         frame = self.frame,
-        nextEntityId = self.nextEntityId,
         inputs = tableUtils.cloneTable(self.inputs),
         data = tableUtils.cloneTable(self.data),
         entities = {}
@@ -37,7 +37,6 @@ function Simulation:new(params)
     -- Sets the current state of the simulation
     setState = function(self, state)
       self.frame = state.frame or self.frame
-      self.nextEntityId = state.nextEntityId or self.nextEntityId
       if state.inputs then
         self.inputs = tableUtils.cloneTable(state.inputs)
       end
@@ -60,6 +59,9 @@ function Simulation:new(params)
       clonedSimulation.handleEvent = self.handleEvent
       -- Set the new simuation's state
       clonedSimulation:setState(self:getState())
+      -- Set the simulation's private vars
+      clonedSimulation._entityIdPrefix = self._entityIdPrefix
+      clonedSimulation._nextEntityId = self._nextEntityId
       -- Return the newly-cloned simulation
       return clonedSimulation
     end,
@@ -72,11 +74,16 @@ function Simulation:new(params)
       end
     end,
     -- Spawns a new entity, generating a new id for it
-    spawnEntity = function(self, entity, skipIdGeneration)
-      table.insert(self.entities, entity)
-      if not skipIdGeneration then
+    spawnEntity = function(self, entity, shouldGenerateId)
+      -- generate an id for the entity if it doesn't already have one
+      if shouldGenerateId == nil then
+        shouldGenerateId = not self:_getEntityId(entity)
+      end
+      if shouldGenerateId then
         self:_setEntityId(entity, self:_generateEntityId())
       end
+      -- Add the entity to the simulation
+      table.insert(self.entities, entity)
       return entity
     end,
     -- Despawns an entity with the given id and returns the removed entity
@@ -89,9 +96,13 @@ function Simulation:new(params)
         end
       end
     end,
+    resetEntityIdGeneration = function(self, prefix)
+      self._entityIdPrefix = prefix or ''
+      self._nextEntityId = 1
+    end,
     reset = function(self)
+      self:resetEntityIdGeneration()
       self.frame = 0
-      self.nextEntityId = 1
       self.inputs = {}
       self.data = {}
       self.entities = {}
@@ -103,8 +114,8 @@ function Simulation:new(params)
     -- Private methods
     -- Generates a new entity id
     _generateEntityId = function(self)
-      local entityId = self.nextEntityId
-      self.nextEntityId = self.nextEntityId + 1
+      local entityId = self._entityIdPrefix .. self._nextEntityId
+      self._nextEntityId = self._nextEntityId + 1
       return entityId
     end,
     -- Gets the unique id from a fully-hydrated entity object

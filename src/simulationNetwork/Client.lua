@@ -7,18 +7,25 @@ local Client = {}
 function Client:new(params)
   params = params or {}
   local conn = params.conn
+  local simulationDefinition = params.simulationDefinition
   local framesBetweenFlushes = params.framesBetweenFlushes or 0
   local framesBetweenPings = params.framesBetweenPings or 15
-  local simulationDefinition = params.simulationDefinition
 
+  -- Create a simulation for the client and a runner for it
   local simulation = simulationDefinition:new()
   local runner = SimulationRunner:new({
     simulation = simulation
   })
+
+  -- Create offset optimizers to minimize time desync and latency
   local timeSyncOptimizer = OffsetOptimizer:new()
   local latencyOptimizer = OffsetOptimizer:new()
 
   local client = {
+    -- Private config vars
+    _framesBetweenPings = framesBetweenPings,
+    _framesBetweenFlushes = framesBetweenFlushes,
+
     -- Private vars
     _conn = conn,
     _status = 'disconnected',
@@ -31,14 +38,12 @@ function Client:new(params)
     _latencyOptimizer = latencyOptimizer,
     _handshake = nil,
     _framesOfLatency = 0,
+    _framesUntilNextPing = framesBetweenPings,
+    _framesUntilNextFlush = framesBetweenFlushes,
 
     -- Public vars
     clientId = nil,
     data = {},
-    framesBetweenPings = framesBetweenPings,
-    framesUntilNextPing = framesBetweenPings,
-    framesBetweenFlushes = framesBetweenFlushes,
-    framesUntilNextFlush = framesBetweenFlushes,
 
     -- Public methods
     connect = function(self, handshake)
@@ -94,7 +99,7 @@ function Client:new(params)
           event = event
         }, reliable)
         -- Send immediately if we're not buffering
-        if self.framesBetweenFlushes <= 0 then
+        if self._framesBetweenFlushes <= 0 then
           self:flush()
         end
         -- Return the event
@@ -102,7 +107,10 @@ function Client:new(params)
       end
     end,
     setInputs = function(self, inputs, params)
-      self:fireEvent('set-inputs', inputs, params, true)
+      self:fireEvent('set-inputs', {
+        clientId = self.clientId,
+        inputs = inputs
+      }, params, true)
     end,
     flush = function(self, reliable)
       if self._status == 'connected' then
@@ -140,15 +148,15 @@ function Client:new(params)
         self._latencyOptimizer:reset()
       end
       -- Send a lazy ping every so often to guage latency accuracy
-      self.framesUntilNextPing = self.framesUntilNextPing - df
-      if self.framesUntilNextPing <= 0 then
-        self.framesUntilNextPing = self.framesBetweenPings
+      self._framesUntilNextPing = self._framesUntilNextPing - df
+      if self._framesUntilNextPing <= 0 then
+        self._framesUntilNextPing = self._framesBetweenPings
         self:_ping()
       end
       -- Flush the client's messages every so often
-      self.framesUntilNextFlush = self.framesUntilNextFlush - df
-      if self.framesUntilNextFlush <= 0 then
-        self.framesUntilNextFlush = self.framesBetweenFlushes
+      self._framesUntilNextFlush = self._framesUntilNextFlush - df
+      if self._framesUntilNextFlush <= 0 then
+        self._framesUntilNextFlush = self._framesBetweenFlushes
         self:flush()
       end
     end,
@@ -233,6 +241,11 @@ function Client:new(params)
         self:_recordLatencyOffset(ping)
       end
     end,
+    _handleStateSnapshot = function(self, state)
+      if self._status == 'connected' then
+        -- TODO
+      end
+    end,
     _applyEvent = function(self, event)
       return self._runner:applyEvent(event)
     end,
@@ -249,7 +262,7 @@ function Client:new(params)
         }, reliable)
       end
       -- But flush immediately if we have no auto-flushing
-      if self.framesBetweenFlushes <= 0 then
+      if self._framesBetweenFlushes <= 0 then
         self:flush()
       end
     end,
@@ -305,6 +318,8 @@ function Client:new(params)
       client:_handleRejectEvent(msg.event)
     elseif msg.type == 'ping-response' then
       client:_handlePingResponse(msg.ping)
+    elseif msg.type == 'state-snapshot' then
+      client:_handleStateSnapshot(msg.state)
     end
   end)
 

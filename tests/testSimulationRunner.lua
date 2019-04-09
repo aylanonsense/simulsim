@@ -44,7 +44,6 @@ describe('simulation runner', function()
   describe('update()', function()
     it('updates the simulation', function()
       progressFrames(60)
-      assert.True(1.99 < sim.time and sim.time < 2.01)
       assert.is.equal(120, sim.frame)
       assert.is.same({ 'apple' }, sim.data.fruits)
     end)
@@ -52,21 +51,19 @@ describe('simulation runner', function()
   describe('setState()', function()
     it('sets the current state of the simulation', function()
       runner:setState({
-        time = 1.50,
         frame = 90,
-        nextEntityId = 1,
         inputs = {},
         data = {
           fruits = { 'cranberry' }
         },
         entities = {}
       })
-      assert.is.equal(1.50, sim.time)
       assert.is.equal(90, sim.frame)
       assert.is.same({ 'cranberry' }, sim.data.fruits)
     end)
     it('undoes past events', function()
       runner:applyEvent({
+        id = 'some-event-id',
         frame = 45,
         type = 'add-fruit',
         data = {
@@ -75,9 +72,7 @@ describe('simulation runner', function()
       })
       assert.is.same({ 'apple', 'mango' }, sim.data.fruits)
       runner:setState({
-        time = 1.00,
         frame = 60,
-        nextEntityId = 1,
         inputs = {},
         data = {
           fruits = { 'cranberry' }
@@ -88,6 +83,7 @@ describe('simulation runner', function()
     end)
     it('maintains future events', function()
       runner:applyEvent({
+        id = 'some-event-id',
         frame = 90,
         type = 'add-fruit',
         data = {
@@ -95,9 +91,7 @@ describe('simulation runner', function()
         }
       })
       runner:setState({
-        time = 1.00,
         frame = 60,
-        nextEntityId = 1,
         inputs = {},
         data = {
           fruits = { 'cranberry' }
@@ -110,9 +104,7 @@ describe('simulation runner', function()
     end)
     it('prevents rewindings due to lost snapshots', function()
       runner:setState({
-        time = 1.00,
         frame = 60,
-        nextEntityId = 1,
         inputs = {},
         data = {
           fruits = { 'cranberry' }
@@ -120,6 +112,7 @@ describe('simulation runner', function()
         entities = {}
       })
       assert.False(runner:applyEvent({
+        id = 'some-event-id',
         frame = 45,
         type = 'add-fruit',
         data = {
@@ -132,7 +125,7 @@ describe('simulation runner', function()
   describe('applyEvent()', function()
     it('schedules events to occur in the future', function()
       runner:applyEvent({
-        id = 'some-event',
+        id = 'some-event-id',
         frame = 65,
         type = 'add-fruit',
         data = {
@@ -140,7 +133,7 @@ describe('simulation runner', function()
         }
       })
       runner:applyEvent({
-        id = 'some-other-event',
+        id = 'some-other-event-id',
         frame = 80,
         type = 'add-fruit',
         data = {
@@ -153,6 +146,7 @@ describe('simulation runner', function()
     end)
     it('immediately applies events that happened in the recent past', function()
       runner:applyEvent({
+        id = 'some-event-id',
         frame = 30,
         type = 'add-fruit',
         data = {
@@ -160,6 +154,7 @@ describe('simulation runner', function()
         }
       })
       runner:applyEvent({
+        id = 'some-other-event-id',
         frame = 50,
         type = 'add-fruit',
         data = {
@@ -170,6 +165,7 @@ describe('simulation runner', function()
     end)
     it('returns true if a future event was scheduled to be applied', function()
       assert.True(runner:applyEvent({
+        id = 'some-event-id',
         frame = 100,
         type = 'add-fruit',
         data = {
@@ -179,6 +175,7 @@ describe('simulation runner', function()
     end)
     it('returns true if a past event was applied', function()
       assert.True(runner:applyEvent({
+        id = 'some-event-id',
         frame = 30,
         type = 'add-fruit',
         data = {
@@ -188,6 +185,7 @@ describe('simulation runner', function()
     end)
     it('returns false if an event too far in the past could not be applied', function()
       assert.False(runner:applyEvent({
+        id = 'some-event-id',
         frame = 29,
         type = 'add-fruit',
         data = {
@@ -198,6 +196,7 @@ describe('simulation runner', function()
     it('calls the simulation\'s handleEvent() method for each applied event', function()
       spy.on(sim, "handleEvent")
       runner:applyEvent({
+        id = 'some-event-id',
         frame = 65,
         type = 'add-fruit',
         data = {
@@ -210,6 +209,7 @@ describe('simulation runner', function()
     it('does not call the simulation\'s handleEvent() method for input events', function()
       spy.on(sim, "handleEvent")
       runner:applyEvent({
+        id = 'some-event-id',
         frame = 65,
         isInputEvent = true,
         type = 'set-inputs',
@@ -224,6 +224,7 @@ describe('simulation runner', function()
     end)
     it('does not include input events in the list of events passed to the simulation\'s update() method', function()
       runner:applyEvent({
+        id = 'some-event-id',
         frame = 65,
         isInputEvent = true,
         type = 'set-inputs',
@@ -239,6 +240,7 @@ describe('simulation runner', function()
     end)
     it('applies set-input events to the simulation\'s input data', function()
       runner:applyEvent({
+        id = 'some-event-id',
         frame = 65,
         isInputEvent = true,
         type = 'set-inputs',

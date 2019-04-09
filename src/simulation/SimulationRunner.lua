@@ -1,3 +1,5 @@
+local stringUtils = require 'src/utils/string'
+
 local SimulationRunner = {}
 function SimulationRunner:new(params)
   params = params or {}
@@ -165,13 +167,15 @@ function SimulationRunner:new(params)
       local nonInputEvents = {}
       for _, event in ipairs(events) do
         if event.isInputEvent and event.type == 'set-inputs' then
-          self._simulation.inputs[event.clientId] = event.data
+          self._simulation.inputs[event.data.clientId] = event.data.inputs
         else
           table.insert(nonInputEvents, event)
+          self._simulation:resetEntityIdGeneration('event-' .. event.id .. '-')
           self._simulation:handleEvent(event.type, event.data)
         end
       end
       -- Update the simulation
+      self._simulation:resetEntityIdGeneration('frame-' .. self._simulation.frame .. '-')
       self._simulation:update(dt, self._simulation.inputs, nonInputEvents, isTopFrame)
       -- Generate a snapshot of the state every so often
       if shouldGenerateStateSnapshots and self._simulation.frame % self._framesBetweenStateSnapshots == 0 then

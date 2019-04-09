@@ -5,24 +5,31 @@ local stringUtils = require 'src/utils/string'
 local Client = {}
 function Client:new(params)
   params = params or {}
+  local server = params.server
   local clientId = params.clientId
   local conn = params.conn
+  local framesBetweenFlushes = params.framesBetweenFlushes or 0
+  local framesBetweenSnapshots = params.framesBetweenSnapshots or 25
 
   local client = {
+    -- Private config vars
+    _framesBetweenFlushes = framesBetweenFlushes,
+    _framesBetweenSnapshots = framesBetweenSnapshots,
+
     -- Private vars
+    _server = server,
     _conn = conn,
     _status = 'handshaking',
     _connectRequestCallbacks = {},
     _disconnectCallbacks = {},
     _receiveEventCallbacks = {},
-    _receivePingCallbacks = {},
     _framesOfLatency = 0,
+    _framesUntilNextFlush = 0,
+    _framesUntilNextSnapshot = 0,
 
     -- Public vars
     clientId = clientId,
     data = {},
-    framesBetweenFlushes = 0,
-    framesUntilNextFlush = 0,
 
     -- Public methods
     -- Allow a client to connect to the server
@@ -31,7 +38,8 @@ function Client:new(params)
         self._status = 'connected'
         self.data = clientData
         if handshake and handshake.framesBetweenFlushes then
-          self.framesBetweenFlushes = handshake.framesBetweenFlushes
+          self._framesBetweenFlushes = handshake.framesBetweenFlushes
+          self._framesUntilNextFlush = self._framesBetweenFlushes
         end
         self._conn:buffer({
           type = 'connect-accept',
@@ -87,7 +95,7 @@ function Client:new(params)
           type = 'event',
           event = event
         }, reliable)
-        if self.framesBetweenFlushes == 0 then
+        if self._framesBetweenFlushes <= 0 then
           self:flush()
         end
       end
@@ -100,21 +108,17 @@ function Client:new(params)
           type = 'reject-event',
           event = event
         }, reliable)
-        if self.framesBetweenFlushes == 0 then
+        if self._framesBetweenFlushes <= 0 then
           self:flush()
         end
       end
     end,
-    sendPingResponse = function(self, ping, params)
-      local reliable = params and params.reliable
+    sendStateSnapshot = function(self)
       if self._status == 'connected' then
-        self._conn:buffer({
-          type = 'ping-response',
-          ping = ping
-        }, reliable)
-        if self.framesBetweenFlushes == 0 then
-          self:flush()
-        end
+        self._conn:send({
+          type = 'state-snapshot',
+          state = self._server:getSimulation():getState()
+        }, true)
       end
     end,
     flush = function(self, params)
@@ -123,12 +127,22 @@ function Client:new(params)
         self._conn:flush(reliable)
       end
     end,
-    update = function(self, dt, numFrames)
+    update = function(self, dt, df)
       -- Flush the client's messages every so often
-      self.framesUntilNextFlush = self.framesUntilNextFlush - numFrames
-      if self.framesUntilNextFlush <= 0 then
-        self.framesUntilNextFlush = self.framesBetweenFlushes
-        self:flush()
+      if self._framesBetweenFlushes > 0 then
+        self._framesUntilNextFlush = self._framesUntilNextFlush - df
+        if self._framesUntilNextFlush <= 0 then
+          self._framesUntilNextFlush = self._framesBetweenFlushes
+          self:flush()
+        end
+      end
+      -- Send a snapshot of the simulation state every so often
+      if self._framesBetweenSnapshots > 0 then
+        self._framesUntilNextSnapshot = self._framesUntilNextSnapshot - df
+        if self._framesUntilNextSnapshot <= 0 then
+          self._framesUntilNextSnapshot = self._framesBetweenSnapshots
+          self:sendStateSnapshot()
+        end
       end
     end,
     getFramesOfLatency = function(self)
@@ -176,9 +190,18 @@ function Client:new(params)
     end,
     _handlePingEvent = function(self, ping)
       if self._status == 'connected' then
-        self._framesOfLatency = ping.clientMetadata.framesOfLatency
-        for _, callback in ipairs(self._receivePingCallbacks) do
-          callback(ping)
+        local frame = self._server:getSimulation().frame
+        self._conn:buffer({
+          type = 'ping-response',
+          ping = {
+            frame = frame,
+            serverMetadata = {
+              frameReceived = frame
+            }
+          }
+        })
+        if self._framesBetweenFlushes <= 0 then
+          self:flush()
         end
       end
     end,
@@ -192,9 +215,6 @@ function Client:new(params)
     end,
     onReceiveEvent = function(self, callback)
       table.insert(self._receiveEventCallbacks, callback)
-    end,
-    onReceivePing = function(self, callback)
-      table.insert(self._receivePingCallbacks, callback)
     end
   }
 
@@ -320,6 +340,7 @@ function Server:new(params)
         local clientId = self._nextClientId
         self._nextClientId = self._nextClientId + 1
         local client = Client:new({
+          server = self,
           clientId = clientId,
           conn = conn
         })
@@ -336,9 +357,6 @@ function Server:new(params)
               end)
               client:onReceiveEvent(function(event)
                 self:_handleReceiveEvent(client, event)
-              end)
-              client:onReceivePing(function(ping)
-                self:_handleReceivePing(client, ping)
               end)
               -- Trigger the connect callback
               for _, callback in ipairs(self._connectCallbacks) do
@@ -364,10 +382,10 @@ function Server:new(params)
     end,
     update = function(self, dt)
       -- Update the simulation (via the simulation runner)
-      local numFrames = self._runner:update(dt)
+      local df = self._runner:update(dt)
       -- Update all clients
       for _, client in ipairs(self._clients) do
-        client:update(dt, numFrames)
+        client:update(dt, df)
       end
     end,
 
@@ -414,13 +432,6 @@ function Server:new(params)
         -- Let the client know that their event was rejected or wasn't able to be applied
         client:rejectEvent(event)
       end
-    end,
-    _handleReceivePing = function(self, client, ping)
-      ping.frame = self._simulation.frame
-      ping.serverMetadata = {
-        frameReceived = self._simulation.frame
-      }
-      client:sendPingResponse(ping)
     end,
     _applyEvent = function(self, event, params)
       -- Apply the event server-side
