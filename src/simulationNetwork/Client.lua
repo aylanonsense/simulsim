@@ -13,7 +13,7 @@ function Client:new(params)
   local framesBetweenPings = params.framesBetweenPings or 15
 
   -- Create a simulation for the client and a runner for it
-  local predictionRunner = SimulationRunner:new({
+  local clientRunner = SimulationRunner:new({
     simulation = simulationDefinition:new()
   })
   local serverRunner = SimulationRunner:new({
@@ -32,7 +32,7 @@ function Client:new(params)
     -- Private vars
     _conn = conn,
     _status = 'disconnected',
-    _predictionRunner = predictionRunner,
+    _clientRunner = clientRunner,
     _serverRunner = serverRunner,
     _timeSyncOptimizer = timeSyncOptimizer,
     _latencyOptimizer = latencyOptimizer,
@@ -93,7 +93,7 @@ function Client:new(params)
         -- Create a new event
         local event = {
           id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
-          frame = self._predictionRunner:getSimulation().frame + self._framesOfLatency + 1,
+          frame = self._clientRunner:getSimulation().frame + self._framesOfLatency + 1,
           type = eventType,
           data = eventData,
           isInputEvent = isInputEvent or false
@@ -102,11 +102,12 @@ function Client:new(params)
         -- Apply a prediction of the event
         if predictClientSide then
           local predictedEvent = tableUtils.cloneTable(event)
-          predictedEvent.frame = self._predictionRunner:getSimulation().frame + 1
-          self._predictionRunner:applyEvent(predictedEvent, {
+          predictedEvent.frame = self._clientRunner:getSimulation().frame + 1
+          local applyEventParams = {
             framesUntilAutoUnapply = self._framesOfLatency + 5,
             preserveFrame = true
-          })
+          }
+          self._clientRunner:applyEvent(predictedEvent, applyEventParams)
         end
         -- Send the event to the server
         self._conn:buffer({
@@ -135,11 +136,11 @@ function Client:new(params)
       end
     end,
     getSimulation = function(self)
-      return self._predictionRunner:getSimulation()
+      return self._clientRunner:getSimulation()
     end,
     update = function(self, dt)
       -- Update the simulation (via the simulation runner)
-      local df = self._predictionRunner:update(dt)
+      local df = self._clientRunner:update(dt)
       self._serverRunner:update(dt)
       -- Update the timing and latency optimizers
       self._timeSyncOptimizer:update(dt, df)
@@ -149,10 +150,10 @@ function Client:new(params)
       if timeAdjustment ~= 0 then
         -- TODO handle excessively large time adjustments
         if timeAdjustment > 0 then
-          self._predictionRunner:fastForward(timeAdjustment)
+          self._clientRunner:fastForward(timeAdjustment)
           self._serverRunner:fastForward(timeAdjustment)
         elseif timeAdjustment < 0 then
-          self._predictionRunner:rewind(-timeAdjustment)
+          self._clientRunner:rewind(-timeAdjustment)
           self._serverRunner:rewind(-timeAdjustment)
         end
         self._timeSyncOptimizer:reset()
@@ -180,12 +181,12 @@ function Client:new(params)
         self:flush()
       end
       -- Make sure we have enough recorded history to be operational
-      if self._predictionRunner.framesOfHistory > math.max(self._framesOfLatency + 10, 30) then
-        self._predictionRunner.framesOfHistory = self._predictionRunner.framesOfHistory - 1
+      if self._clientRunner.framesOfHistory > math.max(self._framesOfLatency + 10, 30) then
+        self._clientRunner.framesOfHistory = self._clientRunner.framesOfHistory - 1
       else
-        self._predictionRunner.framesOfHistory = math.min(self._framesOfLatency + 10, 300)
+        self._clientRunner.framesOfHistory = math.min(self._framesOfLatency + 10, 300)
       end
-      self._serverRunner.framesOfHistory = self._predictionRunner.framesOfHistory
+      self._serverRunner.framesOfHistory = self._clientRunner.framesOfHistory
     end,
     simulateNetworkConditions = function(self, params)
       self._conn:setNetworkConditions(params)
@@ -211,8 +212,8 @@ function Client:new(params)
         self.data = clientData or {}
         self._framesOfLatency = math.ceil(60 * self._conn:getLatency() / 1000)
         -- Set the initial state of the client-side simulation
-        self._predictionRunner:reset()
-        self._predictionRunner:setState(state)
+        self._clientRunner:reset()
+        self._clientRunner:setState(state)
         self._serverRunner:reset()
         self._serverRunner:setState(state)
         -- Trigger connect callbacks
@@ -272,16 +273,16 @@ function Client:new(params)
     end,
     _handleStateSnapshot = function(self, state)
       if self._status == 'connected' then
-        -- TODO
+        self._serverRunner:applyState(state)
       end
     end,
     _applyEvent = function(self, event)
       self._serverRunner:applyEvent(event)
-      return self._predictionRunner:applyEvent(event)
+      return self._clientRunner:applyEvent(event)
     end,
     _unapplyEvent = function(self, event)
       self._serverRunner:unapplyEvent(event)
-      return self._predictionRunner:unapplyEvent(event)
+      return self._clientRunner:unapplyEvent(event)
     end,
     _ping = function(self, params)
       local reliable = params and params.reliable
@@ -298,7 +299,7 @@ function Client:new(params)
       end
     end,
     _addClientMetadata = function(self, obj)
-      local frame = self._predictionRunner:getSimulation().frame
+      local frame = self._clientRunner:getSimulation().frame
       obj.clientMetadata = {
         clientId = self.clientId,
         frameSent = frame,
@@ -308,7 +309,7 @@ function Client:new(params)
       return obj
     end,
     _recordTimeSyncOffset = function(self, msg)
-      self._timeSyncOptimizer:recordOffset(msg.frame - self._predictionRunner:getSimulation().frame - 1)
+      self._timeSyncOptimizer:recordOffset(msg.frame - self._clientRunner:getSimulation().frame - 1)
     end,
     _recordLatencyOffset = function(self, msg)
       if msg.clientMetadata and msg.clientMetadata.clientId == self.clientId and msg.clientMetadata.framesOfLatency == self._framesOfLatency then

@@ -14,6 +14,7 @@ function SimulationRunner:new(params)
 
     -- Private vars
     _simulation = simulation,
+    _futureStates = {},
     _stateHistory = {},
     _eventHistory = {},
 
@@ -106,6 +107,24 @@ function SimulationRunner:new(params)
       self._stateHistory = {}
       self:_generateStateSnapshot()
     end,
+    -- Sets the state, or applies it to the past if the state is in the past, or schedules it to be applied in the future
+    applyState = function(self, state)
+      -- If the state represents a moment in the past, rewind to apply it
+      if state.frame <= self._simulation.frame then
+        local currFrame = self._simulation.frame
+        if self:_rewindToFrame(state.frame) then
+          self:setState(state)
+          self:_fastForwardToFrame(currFrame)
+          return true
+        else
+          return false
+        end
+      -- Otherwise if the state represents a moment in the future, schedule it
+      else
+        table.insert(self._futureStates, state)
+        return true
+      end
+    end,
     update = function(self, dt)
       -- TODO take dt into account
       self:_moveSimulationForwardOneFrame(true, true)
@@ -116,6 +135,7 @@ function SimulationRunner:new(params)
     end,
     reset = function(self)
       self._simulation:reset()
+      self._futureStates = {}
       self._stateHistory = {}
       self._eventHistory = {}
     end,
@@ -206,6 +226,15 @@ function SimulationRunner:new(params)
       -- Update the simulation
       self._simulation:resetEntityIdGeneration('frame-' .. self._simulation.frame .. '-')
       self._simulation:update(dt, self._simulation.inputs, nonInputEvents, isTopFrame)
+      -- Check to see if any scheduled states need to applied now
+      for i = #self._futureStates, 1, -1 do
+        if self._futureStates[i].frame == self._simulation.frame then
+          self:setState(self._futureStates[i])
+        end
+        if self._futureStates[i].frame <= self._simulation.frame then
+          table.remove(self._futureStates, i)
+        end
+      end
       -- Generate a snapshot of the state every so often
       if shouldGenerateStateSnapshots and self._simulation.frame % self._framesBetweenStateSnapshots == 0 then
         self:_generateStateSnapshot()
