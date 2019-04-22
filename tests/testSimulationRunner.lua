@@ -194,7 +194,7 @@ describe('simulation runner', function()
       }))
     end)
     it('calls the simulation\'s handleEvent() method for each applied event', function()
-      spy.on(sim, "handleEvent")
+      spy.on(sim, 'handleEvent')
       runner:applyEvent({
         id = 'some-event-id',
         frame = 65,
@@ -207,16 +207,18 @@ describe('simulation runner', function()
       assert.spy(sim.handleEvent).was.called(1)
     end)
     it('does not call the simulation\'s handleEvent() method for input events', function()
-      spy.on(sim, "handleEvent")
+      spy.on(sim, 'handleEvent')
       runner:applyEvent({
         id = 'some-event-id',
         frame = 65,
         isInputEvent = true,
         type = 'set-inputs',
-        clientId = 2,
         data = {
-          left = true,
-          right = false
+          clientId = 2,
+          inputs = {
+            left = true,
+            right = false
+          }
         }
       })
       progressFrames(5)
@@ -228,10 +230,12 @@ describe('simulation runner', function()
         frame = 65,
         isInputEvent = true,
         type = 'set-inputs',
-        clientId = 2,
         data = {
-          left = true,
-          right = false
+          clientId = 2,
+          inputs = {
+            left = true,
+            right = false
+          }
         }
       })
       assert.is.same({}, sim.inputs)
@@ -244,10 +248,12 @@ describe('simulation runner', function()
         frame = 65,
         isInputEvent = true,
         type = 'set-inputs',
-        clientId = 2,
         data = {
-          left = true,
-          right = false
+          clientId = 2,
+          inputs = {
+            left = true,
+            right = false
+          }
         }
       })
       assert.is.same({}, sim.inputs)
