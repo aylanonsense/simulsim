@@ -30,7 +30,7 @@ function Simulation:new(params)
         entities = {}
       }
       for _, entity in ipairs(self.entities) do
-        table.insert(state.entities, tableUtils.cloneTable(self:_getStateFromEntity(entity)))
+        table.insert(state.entities, tableUtils.cloneTable(self:getStateFromEntity(entity)))
       end
       return state
     end,
@@ -46,7 +46,7 @@ function Simulation:new(params)
       if state.entities then
         self.entities = {}
         for _, entityState in ipairs(state.entities) do
-          table.insert(self.entities, self:_createEntityFromState(tableUtils.cloneTable(entityState)))
+          table.insert(self.entities, self:createEntityFromState(tableUtils.cloneTable(entityState)))
         end
       end
     end,
@@ -68,7 +68,7 @@ function Simulation:new(params)
     -- Gets an entity with the given id
     getEntityById = function(self, entityId)
       for _, entity in ipairs(self.entities) do
-        if self:_getEntityId(entity) == entityId then
+        if self:getEntityId(entity) == entityId then
           return entity
         end
       end
@@ -77,10 +77,10 @@ function Simulation:new(params)
     spawnEntity = function(self, entity, shouldGenerateId)
       -- generate an id for the entity if it doesn't already have one
       if shouldGenerateId == nil then
-        shouldGenerateId = not self:_getEntityId(entity)
+        shouldGenerateId = not self:getEntityId(entity)
       end
       if shouldGenerateId then
-        self:_setEntityId(entity, self:_generateEntityId())
+        self:setEntityId(entity, self:generateEntityId())
       end
       -- Add the entity to the simulation
       table.insert(self.entities, entity)
@@ -90,7 +90,7 @@ function Simulation:new(params)
     despawnEntity = function(self, entityId)
       for i = #self.entities, 1, -1 do
         local entity = self.entities[i]
-        if self:_getEntityId(entity) == entityId then
+        if self:getEntityId(entity) == entityId then
           table.remove(self.entities, i)
           return entity
         end
@@ -110,28 +110,26 @@ function Simulation:new(params)
         self:setState(self._initialState)
       end
     end,
-
-    -- Private methods
     -- Generates a new entity id
-    _generateEntityId = function(self)
+    generateEntityId = function(self)
       local entityId = self._entityIdPrefix .. self._nextEntityId
       self._nextEntityId = self._nextEntityId + 1
       return entityId
     end,
     -- Gets the unique id from a fully-hydrated entity object
-    _getEntityId = function(self, entity)
+    getEntityId = function(self, entity)
       return entity.id
     end,
     -- Sets the unique id on a fully-hydrated entity object
-    _setEntityId = function(self, entity, entityId)
+    setEntityId = function(self, entity, entityId)
       entity.id = entityId
     end,
     -- Transforms a fully-hydrated entity (with methods, etc) into a simple state object
-    _getStateFromEntity = function(self, entity)
+    getStateFromEntity = function(self, entity)
       return entity
     end,
     -- Transforms a simple state object into a fully-hydrated entity
-    _createEntityFromState = function(self, state)
+    createEntityFromState = function(self, state)
       return state
     end,
 

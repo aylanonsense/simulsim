@@ -101,13 +101,16 @@ function Client:new(params)
         self:_addClientMetadata(event)
         -- Apply a prediction of the event
         if predictClientSide then
-          local predictedEvent = tableUtils.cloneTable(event)
-          predictedEvent.frame = self._clientRunner:getSimulation().frame + 1
-          local applyEventParams = {
+          local serverEvent = tableUtils.cloneTable(event)
+          self._serverRunner:applyEvent(serverEvent, {
+            framesUntilAutoUnapply = self._framesOfLatency + 5
+          })
+          local clientEvent = tableUtils.cloneTable(event)
+          clientEvent.frame = self._clientRunner:getSimulation().frame + 1
+          self._clientRunner:applyEvent(clientEvent, {
             framesUntilAutoUnapply = self._framesOfLatency + 5,
             preserveFrame = true
-          }
-          self._clientRunner:applyEvent(predictedEvent, applyEventParams)
+          })
         end
         -- Send the event to the server
         self._conn:buffer({
@@ -197,6 +200,15 @@ function Client:new(params)
     getFramesOfLatency = function(self)
       return self._framesOfLatency
     end,
+    syncEntityState = function(self, entity, presentState, futureState)
+      return self:isEntityUsingClientSidePrediction(entity) and futureState or presentState
+    end,
+    syncSimulationData = function(self, presentData, futureData)
+      return futureData
+    end,
+    isEntityUsingClientSidePrediction = function(self, entity)
+      return false
+    end,
 
     -- Private methods
     _handleConnect = function(self)
@@ -277,6 +289,53 @@ function Client:new(params)
     _handleStateSnapshot = function(self, state)
       if self._status == 'connected' then
         self._serverRunner:applyState(state)
+        -- Predict the future game state based on where the server is right now
+        local futureRunner = self._serverRunner:clone()
+        futureRunner:fastForward(self._framesOfLatency)
+        local presentSimulation = self._serverRunner:getSimulation()
+        local futureSimulation = futureRunner:getSimulation()
+        -- Use that to construct a state for the client predicted simulation
+        local frame = presentSimulation.frame
+        local inputs = tableUtils.cloneTable(presentSimulation.inputs)
+        inputs[self.clientId] = futureSimulation.inputs[self.clientId]
+        local data = self:syncSimulationData(presentSimulation.data, futureSimulation.data)
+        local entities = {}
+        -- Handle entities that exist in the future and may or may not exist currently
+        for _, futureEntity in ipairs(futureSimulation.entities) do
+          local entityId = futureSimulation:getEntityId(futureEntity)
+          local futureState = futureSimulation:getStateFromEntity(futureEntity)
+          local presentEntity = presentSimulation:getEntityById(entityId)
+          local presentState = nil
+          if presentEntity then
+            presentState = presentSimulation:getStateFromEntity(presentEntity)
+          end
+          -- Decide whether to use the future state or present state for the entity
+          local state = self:syncEntityState(futureEntity, presentState, futureState)
+          if state then
+            table.insert(entities, state)
+          end
+        end
+        -- Handle entities that exist now but not in the future
+        for _, presentEntity in ipairs(presentSimulation.entities) do
+          local entityId = presentSimulation:getEntityId(presentEntity)
+          local futureEntity = futureSimulation:getEntityById(entityId)
+          if not futureEntity then
+            local presentState = presentSimulation:getStateFromEntity(presentEntity)
+            local state = self:syncEntityState(presentEntity, presentState, nil)
+            if state then
+              table.insert(entities, state)
+            end
+          end
+        end
+        -- Assemble the idealized state that features client-side prediction
+        local state = {
+          frame = frame,
+          inputs = inputs,
+          data = data,
+          entities = entities
+        }
+        -- Apply this to the client runner
+        self._clientRunner:applyState(state)
       end
     end,
     _applyEvent = function(self, event)

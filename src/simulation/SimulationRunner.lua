@@ -151,6 +151,20 @@ function SimulationRunner:new(params)
       self:_fastForwardToFrame(self._simulation.frame + numFrames, true)
       return true
     end,
+    clone = function(self)
+      -- Create a new runner
+      local clonedRunner = SimulationRunner:new({
+        simulation = self._simulation:clone(),
+        framesOfHistory = self.framesOfHistory,
+        framesBetweenStateSnapshots = self._framesBetweenStateSnapshots
+      })
+      -- Set the runner's private vars
+      clonedRunner._futureStates = tableUtils.cloneTable(self._futureStates)
+      clonedRunner._stateHistory = tableUtils.cloneTable(self._stateHistory)
+      clonedRunner._eventHistory = tableUtils.cloneTable(self._eventHistory)
+      -- Return the newly-cloned runner
+      return clonedRunner
+    end,
 
     -- Private methods
     -- Set the simulation to the state it was in after the given frame

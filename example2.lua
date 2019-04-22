@@ -36,6 +36,10 @@ local simulationDefinition = simulsim.defineSimulation({
 -- Game params
 local network
 
+function isEntityUsingClientSidePrediction(self, entity)
+  return entity.clientId == self.clientId
+end
+
 function love.load()
   -- Create a new network
   network = simulsim.createNetworkedSimulation({
@@ -47,21 +51,23 @@ function love.load()
   network.server:onConnect(function(client)
     network.server:fireEvent('spawn-player-entity', {
       clientId = client.clientId,
-      x = math.random(10, 170),
-      y = math.random(60, 170),
+      x = math.random(10, 270),
+      y = math.random(60, 270),
       color = { math.random(), math.random(), math.random() }
     })
   end)
+  network.clients[1].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
   network.clients[1]:simulateNetworkConditions({
     latency = 100,
     latencyDeviation = 5,
-    packetLossChance = 0.25
+    packetLossChance = 0.10
   })
   network.clients[1]:connect()
+  network.clients[2].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
   network.clients[2]:simulateNetworkConditions({
     latency = 1000,
     latencyDeviation = 50,
-    packetLossChance = 0.25
+    packetLossChance = 0.10
   })
   network.clients[2]:connect()
 end
@@ -85,13 +91,13 @@ end
 
 function love.draw()
   -- Draw the server and the clients
-  drawSimulation(network.server:getSimulation(), nil, 110, 10, 200, 200, true)
-  drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), nil, 110, 10, 200, 200, false)
-  drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), nil, 110, 10, 200, 200, false)
-  drawSimulation(network.clients[1]:getSimulation(), network.clients[1], 10, 220, 200, 200, true)
-  drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), network.clients[1], 10, 220, 200, 200, false)
-  drawSimulation(network.clients[2]:getSimulation(), network.clients[2], 220, 220, 200, 200, true)
-  drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), network.clients[2], 220, 220, 200, 200, false)
+  drawSimulation(network.server:getSimulation(), nil, 160, 10, 300, 300, true, 'SERVER')
+  drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), nil, 160, 10, 300, 300, false)
+  drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), nil, 160, 10, 300, 300, false)
+  drawSimulation(network.clients[1]:getSimulation(), network.clients[1], 10, 320, 300, 300, true, 'CLIENT 1 - WASD')
+  drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), network.clients[1], 10, 320, 300, 300, false)
+  drawSimulation(network.clients[2]:getSimulation(), network.clients[2], 320, 320, 300, 300, true, 'CLIENT 2 - ARROW KEYS')
+  drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), network.clients[2], 320, 320, 300, 300, false)
 end
 
 function love.keypressed(key)
@@ -108,7 +114,7 @@ function love.keypressed(key)
   end
 end
 
-function drawSimulation(sim, client, x, y, width, height, fullRender)
+function drawSimulation(sim, client, x, y, width, height, fullRender, title)
   if fullRender then
     love.graphics.setColor(0.5, 0.5, 0.5)
     love.graphics.rectangle('fill', x, y, width, height)
@@ -125,10 +131,11 @@ function drawSimulation(sim, client, x, y, width, height, fullRender)
   -- Draw network info
   if fullRender then
     love.graphics.setColor(0, 0, 0)
-    love.graphics.print('sim time: ' .. math.floor(sim.frame / 60), x + 4, y + 2)
+    love.graphics.print(title, x + 4, y + 2)
+    love.graphics.print('sim time: ' .. math.floor(sim.frame / 60), x + 4, y + 18)
     if client then
-      love.graphics.print('client id: ' .. (client.clientId or '--'), x + 4, y + 18)
-      love.graphics.print('latency: ' .. client:getFramesOfLatency() .. ' frames', x + 4, y + 34)
+      love.graphics.print('client id: ' .. (client.clientId or '--'), x + 4, y + 34)
+      love.graphics.print('latency: ' .. client:getFramesOfLatency() .. ' frames', x + 4, y + 50)
     end
   end
 end
