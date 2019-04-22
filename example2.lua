@@ -55,13 +55,13 @@ function love.load()
   network.clients[1]:simulateNetworkConditions({
     latency = 100,
     latencyDeviation = 5,
-    packetLossChance = 0.0
+    packetLossChance = 0.25
   })
   network.clients[1]:connect()
   network.clients[2]:simulateNetworkConditions({
     latency = 1000,
     latencyDeviation = 50,
-    packetLossChance = 0.0
+    packetLossChance = 0.25
   })
   network.clients[2]:connect()
 end
@@ -85,9 +85,13 @@ end
 
 function love.draw()
   -- Draw the server and the clients
-  drawSimulation(network.server:getSimulation(), nil, 110, 10, 200, 200)
-  drawSimulation(network.clients[1]:getSimulation(), network.clients[1], 10, 220, 200, 200)
-  drawSimulation(network.clients[2]:getSimulation(), network.clients[2], 220, 220, 200, 200)
+  drawSimulation(network.server:getSimulation(), nil, 110, 10, 200, 200, true)
+  drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), nil, 110, 10, 200, 200, false)
+  drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), nil, 110, 10, 200, 200, false)
+  drawSimulation(network.clients[1]:getSimulation(), network.clients[1], 10, 220, 200, 200, true)
+  drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), network.clients[1], 10, 220, 200, 200, false)
+  drawSimulation(network.clients[2]:getSimulation(), network.clients[2], 220, 220, 200, 200, true)
+  drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), network.clients[2], 220, 220, 200, 200, false)
 end
 
 function love.keypressed(key)
@@ -104,21 +108,27 @@ function love.keypressed(key)
   end
 end
 
-function drawSimulation(sim, client, x, y, width, height)
-  love.graphics.setColor(0.5, 0.5, 0.5)
-  love.graphics.rectangle('fill', x, y, width, height)
+function drawSimulation(sim, client, x, y, width, height, fullRender)
+  if fullRender then
+    love.graphics.setColor(0.5, 0.5, 0.5)
+    love.graphics.rectangle('fill', x, y, width, height)
+  end
   -- Draw entities
   for _, entity in ipairs(sim.entities) do
     love.graphics.setColor(entity.color)
-    love.graphics.rectangle('fill', x + entity.x, y + entity.y, entity.width, entity.height)
-    love.graphics.setColor(0, 0, 0)
-    love.graphics.print(entity.clientId, x + entity.x + 6, y + entity.y + 4)
+    love.graphics.rectangle(fullRender and 'fill' or 'line', x + entity.x, y + entity.y, entity.width, entity.height)
+    if fullRender then
+      love.graphics.setColor(0, 0, 0)
+      love.graphics.print(entity.clientId, x + entity.x + 6, y + entity.y + 4)
+    end
   end
   -- Draw network info
-  love.graphics.setColor(0, 0, 0)
-  love.graphics.print('sim time: ' .. math.floor(sim.frame / 60), x + 4, y + 2)
-  if client then
-    love.graphics.print('client id: ' .. (client.clientId or '--'), x + 4, y + 18)
-    love.graphics.print('latency: ' .. client:getFramesOfLatency() .. ' frames', x + 4, y + 34)
+  if fullRender then
+    love.graphics.setColor(0, 0, 0)
+    love.graphics.print('sim time: ' .. math.floor(sim.frame / 60), x + 4, y + 2)
+    if client then
+      love.graphics.print('client id: ' .. (client.clientId or '--'), x + 4, y + 18)
+      love.graphics.print('latency: ' .. client:getFramesOfLatency() .. ' frames', x + 4, y + 34)
+    end
   end
 end

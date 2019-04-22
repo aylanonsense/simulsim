@@ -138,6 +138,9 @@ function Client:new(params)
     getSimulation = function(self)
       return self._clientRunner:getSimulation()
     end,
+    getSimulationWithoutPrediction = function(self)
+      return self._serverRunner:getSimulation()
+    end,
     update = function(self, dt)
       -- Update the simulation (via the simulation runner)
       local df = self._clientRunner:update(dt)
