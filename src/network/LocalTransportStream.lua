@@ -1,5 +1,5 @@
-local TransportLayer = {}
-function TransportLayer:new(params)
+local LocalTransportStream = {}
+function LocalTransportStream:new(params)
   params = params or {}
   local latency = params.latency or 0
   local latencyDeviation = params.latencyDeviation or 0
@@ -45,7 +45,7 @@ function TransportLayer:new(params)
         self:_handleReceive(packetsToSend[i].message, packetsToSend[i].unlosable)
       end
     end,
-    setNetworkConditions = function(self, params)
+    simulateNetworkConditions = function(self, params)
       params = params or {}
       if params.latency then
         self._latency = params.latency
@@ -77,4 +77,4 @@ function TransportLayer:new(params)
   return transportLayer
 end
 
-return TransportLayer
+return LocalTransportStream

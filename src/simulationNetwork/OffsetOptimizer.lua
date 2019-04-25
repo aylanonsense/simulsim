@@ -2,15 +2,19 @@ local OffsetOptimizer = {}
 function OffsetOptimizer:new(params)
   params = params or {}
   local numFramesOfHistory = params.numFramesOfHistory or 150
-  local minimumAllowedOffset = params.minimumAllowedOffset or 0
-  local maximumAllowedOffset = params.maximumAllowedOffset or 1
+  local minPermissableOffset = params.minPermissableOffset or 0
+  local maxPermissableOffset = params.maxPermissableOffset or 1
+  local minOffsetBeforeImmediateCorrection = params.minOffsetBeforeImmediateCorrection or nil
+  local maxOffsetBeforeImmediateCorrection = params.maxOffsetBeforeImmediateCorrection or nil
   local maxSequentialFramesWithoutRecords = params.maxSequentialFramesWithoutRecords or 15
 
   local optimizer = {
     -- Private config vars
     _numFramesOfHistory = numFramesOfHistory,
-    _minimumAllowedOffset = minimumAllowedOffset,
-    _maximumAllowedOffset = maximumAllowedOffset,
+    _minPermissableOffset = minPermissableOffset,
+    _maxPermissableOffset = maxPermissableOffset,
+    _minOffsetBeforeImmediateCorrection = minOffsetBeforeImmediateCorrection,
+    _maxOffsetBeforeImmediateCorrection = maxOffsetBeforeImmediateCorrection,
     _maxSequentialFramesWithoutRecords = maxSequentialFramesWithoutRecords,
 
     -- Private vars
@@ -25,28 +29,18 @@ function OffsetOptimizer:new(params)
     end,
     -- Gets the amount the optimizer would recommend adjusting by, negative means slow down, positive means speed up
     getRecommendedAdjustment = function(self)
-      local minOffset = nil
+      local offset = nil
       for i = 1, #self._records do
-        if self._records[i] and (minOffset == nil or self._records[i] < minOffset) then
-          minOffset = self._records[i]
+        if self._records[i] and (offset == nil or self._records[i] < offset) then
+          offset = self._records[i]
         end
       end
-      minOffset = minOffset or 0
-      if #self._records >= self._numFramesOfHistory or minOffset < self._minimumAllowedOffset then
-        if self._minimumAllowedOffset <= minOffset and minOffset <= self._maximumAllowedOffset then
-          return 0
-        else
-          return minOffset
-        end
+      if offset and ((self._minOffsetBeforeImmediateCorrection and offset < self._minOffsetBeforeImmediateCorrection) or (self._maxOffsetBeforeImmediateCorrection and offset > self._maxOffsetBeforeImmediateCorrection)) then
+        return offset
+      elseif offset and #self._records >= self._numFramesOfHistory and (offset < self._minPermissableOffset or offset > self._maxPermissableOffset) then
+        return offset
       else
         return 0
-      end
-    end,
-    applyAdjustment = function(self, adjustment)
-      for i = 1, #self._records do
-        if self._records[i] then
-          self._records[i] = self._records[i] - adjustment
-        end
       end
     end,
     reset = function(self)
