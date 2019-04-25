@@ -4,21 +4,28 @@ local stringUtils = require 'src/utils/string'
 
 --- Creates a new client-side connection that's able to connect to a server
 local ShareConnection = {}
-function ShareConnection:new()
+function ShareConnection:new(params)
+  params = params or {}
+  local isLocalhost = params.isLocalhost ~= false
+  local port = params.port or 22122
+
   local conn = {
     -- Private vars
+    _isLocalhost = isLocalhost,
+    _port = port,
     _connectCallbacks = {},
     _disconnectCallbacks = {},
     _receiveCallbacks = {},
 
     -- Public methods
     connect = function(self)
-      -- Start connecting
-      if USE_CASTLE_CONFIG then
-        share.client.useCastleConfig()
-      else
+      -- Start connecting to a localhost server
+      if self._isLocalhost then
         share.client.enabled = true
-        share.client.start('127.0.0.1:22122')
+        share.client.start('127.0.0.1:' .. self._port)
+      -- Start connecting a proper remote server
+      else
+        share.client.useCastleConfig()
       end
     end,
     disconnect = function(self)

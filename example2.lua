@@ -1,6 +1,8 @@
 -- Load dependencies
 local simulsim = require 'simulsim'
 
+local MODE = 'multiplayer'
+
 -- Create a new game simulation
 local simulationDefinition = simulsim.defineSimulation({
   initialState = {},
@@ -42,9 +44,9 @@ end
 
 function love.load()
   -- Create a new network
-  network = simulsim.createNetworkedSimulation({
+  network = simulsim.createNetwork({
     simulationDefinition = simulationDefinition,
-    useFakeNetwork = true,
+    mode = MODE,
     numClients = 2
   })
   -- Start the network
@@ -57,57 +59,73 @@ function love.load()
       color = { math.random(), math.random(), math.random() }
     })
   end)
-  network.clients[1].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
-  network.clients[1]:simulateNetworkConditions({
-    latency = 100,
-    latencyDeviation = 10,
-    packetLossChance = 0.00
-  })
-  network.clients[1]:connect()
-  network.clients[2].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
-  network.clients[2]:simulateNetworkConditions({
-    latency = 1000,
-    latencyDeviation = 100,
-    packetLossChance = 0.00
-  })
-  network.clients[2]:connect()
+  if network.clients[1] then
+    network.clients[1].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
+    network.clients[1]:simulateNetworkConditions({
+      latency = 100,
+      latencyDeviation = 10,
+      packetLossChance = 0.00
+    })
+    network.clients[1]:connect()
+  end
+  if network.clients[2] then
+    network.clients[2].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
+    network.clients[2]:simulateNetworkConditions({
+      latency = 1000,
+      latencyDeviation = 100,
+      packetLossChance = 0.00
+    })
+    network.clients[2]:connect()
+  end
 end
 
 function love.update(dt)
-  network.clients[1]:setInputs({
-    up = love.keyboard.isDown('w'),
-    left = love.keyboard.isDown('a'),
-    down = love.keyboard.isDown('s'),
-    right = love.keyboard.isDown('d')
-  })
-  network.clients[2]:setInputs({
-    up = love.keyboard.isDown('up'),
-    left = love.keyboard.isDown('left'),
-    down = love.keyboard.isDown('down'),
-    right = love.keyboard.isDown('right')
-  })
+  if network.clients[1] then
+    network.clients[1]:setInputs({
+      up = love.keyboard.isDown('w'),
+      left = love.keyboard.isDown('a'),
+      down = love.keyboard.isDown('s'),
+      right = love.keyboard.isDown('d')
+    })
+  end
+  if network.clients[2] then
+    network.clients[2]:setInputs({
+      up = love.keyboard.isDown('up'),
+      left = love.keyboard.isDown('left'),
+      down = love.keyboard.isDown('down'),
+      right = love.keyboard.isDown('right')
+    })
+  end
   -- Update the network
   network:update(dt)
 end
 
 function love.draw()
   -- Draw the server and the clients
-  drawSimulation(network.server:getSimulation(), nil, 160, 10, 300, 300, true, 'SERVER')
-  drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), nil, 160, 10, 300, 300, false)
-  drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), nil, 160, 10, 300, 300, false)
-  drawSimulation(network.clients[1]:getSimulation(), network.clients[1], 10, 320, 300, 300, true, 'CLIENT 1 - WASD')
-  drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), network.clients[1], 10, 320, 300, 300, false)
-  drawSimulation(network.clients[2]:getSimulation(), network.clients[2], 320, 320, 300, 300, true, 'CLIENT 2 - ARROW KEYS')
-  drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), network.clients[2], 320, 320, 300, 300, false)
+  if network:isServerSide() then
+    drawSimulation(network.server:getSimulation(), nil, 160, 10, 300, 300, true, 'SERVER')
+  end
+  if network:isClientSide() then
+    if network.clients[1] then
+      drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), nil, 160, 10, 300, 300, false)
+      drawSimulation(network.clients[1]:getSimulation(), network.clients[1], 10, 320, 300, 300, true, 'CLIENT 1 - WASD')
+      drawSimulation(network.clients[1]:getSimulationWithoutPrediction(), network.clients[1], 10, 320, 300, 300, false)
+    end
+    if network.clients[2] then
+      drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), nil, 160, 10, 300, 300, false)
+      drawSimulation(network.clients[2]:getSimulation(), network.clients[2], 320, 320, 300, 300, true, 'CLIENT 2 - ARROW KEYS')
+      drawSimulation(network.clients[2]:getSimulationWithoutPrediction(), network.clients[2], 320, 320, 300, 300, false)
+    end
+  end
 end
 
 function love.keypressed(key)
-  if key == 'lshift' then
+  if key == 'lshift' and network.clients[1] then
     network.clients[1]:fireEvent('change-player-color', {
       clientId = network.clients[1].clientId,
       color = { math.random(), math.random(), math.random() }
     })
-  elseif key == 'rshift' then
+  elseif key == 'rshift' and network.clients[2] then
     network.clients[2]:fireEvent('change-player-color', {
       clientId = network.clients[2].clientId,
       color = { math.random(), math.random(), math.random() }
@@ -135,8 +153,9 @@ function drawSimulation(sim, client, x, y, width, height, fullRender, title)
     love.graphics.print(title, x + 4, y + 2)
     love.graphics.print('sim time: ' .. math.floor(sim.frame / 60), x + 4, y + 18)
     if client then
-      love.graphics.print('client id: ' .. (client.clientId or '--'), x + 4, y + 34)
-      love.graphics.print('latency: ' .. client:getFramesOfLatency() .. ' frames', x + 4, y + 50)
+      love.graphics.print('status: ' .. (client:isConnected() and 'connected' or (client:isConnecting() and 'connecting' or 'disconnected')), x + 4, y + 34)
+      love.graphics.print('client id: ' .. (client.clientId or '--'), x + 4, y + 50)
+      love.graphics.print('latency: ' .. client:getFramesOfLatency() .. ' frames', x + 4, y + 66)
     end
   end
 end

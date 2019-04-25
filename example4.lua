@@ -1,6 +1,9 @@
 -- Load dependencies
 local simulsim = require 'simulsim'
 
+-- print(castle.system.isRemoteServer())
+print(CASTLE_SERVER)
+
 -- Create a new game simulation
 local simulationDefinition = simulsim.defineSimulation({
   initialState = {},

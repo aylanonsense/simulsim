@@ -4,9 +4,15 @@ local stringUtils = require 'src/utils/string'
 
 --- Creates a new server-side connection listener that can have multiple client-side connections connect to it
 local ShareConnectionListener = {}
-function ShareConnectionListener:new()
+function ShareConnectionListener:new(params)
+  params = params or {}
+  local isLocalhost = params.isLocalhost ~= false
+  local port = '' .. (params.port or 22122)
+
   local listener = {
     -- Private vars
+    _isLocalhost = isLocalhost,
+    _port = port,
     _connections = {},
     _connectCallbacks = {},
     _disconnectCallbacks = {},
@@ -14,11 +20,13 @@ function ShareConnectionListener:new()
 
     -- Public methods
     startListening = function(self)
-      if USE_CASTLE_CONFIG then
-        share.server.useCastleConfig()
-      else
+      -- Start a localhost server
+      if self._isLocalhost then
         share.server.enabled = true
-        share.server.start('22122')
+        share.server.start(self._port)
+      -- Start a proper dedicated server
+      else
+        share.server.useCastleConfig()
       end
     end,
     isListening = function(self)
