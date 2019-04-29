@@ -1,12 +1,14 @@
 local OffsetOptimizer = {}
 function OffsetOptimizer:new(params)
   params = params or {}
-  local numFramesOfHistory = params.numFramesOfHistory or 150
+  local numFramesOfHistory = params.numFramesOfHistory or 180
   local minPermissableOffset = params.minPermissableOffset or 0
-  local maxPermissableOffset = params.maxPermissableOffset or 1
+  local maxPermissableOffset = params.maxPermissableOffset or 2
   local minOffsetBeforeImmediateCorrection = params.minOffsetBeforeImmediateCorrection or nil
   local maxOffsetBeforeImmediateCorrection = params.maxOffsetBeforeImmediateCorrection or nil
-  local maxSequentialFramesWithoutRecords = params.maxSequentialFramesWithoutRecords or 15
+  local maxSequentialFramesWithoutRecords = params.maxSequentialFramesWithoutRecords or 8
+  local numSmallestRecordsToIgnore = numSmallestRecordsToIgnore or 5
+  local numLargestRecordsToIgnore = numLargestRecordsToIgnore or 5
 
   local optimizer = {
     -- Private config vars
@@ -16,6 +18,8 @@ function OffsetOptimizer:new(params)
     _minOffsetBeforeImmediateCorrection = minOffsetBeforeImmediateCorrection,
     _maxOffsetBeforeImmediateCorrection = maxOffsetBeforeImmediateCorrection,
     _maxSequentialFramesWithoutRecords = maxSequentialFramesWithoutRecords,
+    _numSmallestRecordsToIgnore = numSmallestRecordsToIgnore,
+    _numLargestRecordsToIgnore = numLargestRecordsToIgnore,
 
     -- Private vars
     _records = {},
@@ -29,16 +33,30 @@ function OffsetOptimizer:new(params)
     end,
     -- Gets the amount the optimizer would recommend adjusting by, negative means slow down, positive means speed up
     getRecommendedAdjustment = function(self)
-      local offset = nil
+      -- Get a list of all the offsets
+      local actualRecords = {}
       for i = 1, #self._records do
-        if self._records[i] and (offset == nil or self._records[i] < offset) then
-          offset = self._records[i]
+        if self._records[i] then
+          table.insert(actualRecords, self._records[i])
         end
       end
-      if offset and ((self._minOffsetBeforeImmediateCorrection and offset < self._minOffsetBeforeImmediateCorrection) or (self._maxOffsetBeforeImmediateCorrection and offset > self._maxOffsetBeforeImmediateCorrection)) then
+      -- We don't yet have enough offsets to make a recommendation
+      if #actualRecords <= self._numSmallestRecordsToIgnore + self._numLargestRecordsToIgnore then
+        return nil
+      end
+      -- Figure out the smallest valid offset
+      table.sort(actualRecords)
+      local offset = actualRecords[self._numSmallestRecordsToIgnore + 1]
+      -- Return an immediate result if it exceeds our immediate correction limits
+      if (self._minOffsetBeforeImmediateCorrection and offset < self._minOffsetBeforeImmediateCorrection) or (self._maxOffsetBeforeImmediateCorrection and offset > self._maxOffsetBeforeImmediateCorrection) then
         return offset
-      elseif offset and #self._records >= self._numFramesOfHistory and (offset < self._minPermissableOffset or offset > self._maxPermissableOffset) then
+      -- Otherwise wait until we have more records
+      elseif #self._records < self._numFramesOfHistory then
+        return nil
+      -- If we have enough records and the adjustment is worth making, return the recommended adjustment
+      elseif offset < self._minPermissableOffset or offset > self._maxPermissableOffset then
         return offset
+      -- But if the adjustment is negligible, just return 0 (meaning no recommended adjustment)
       else
         return 0
       end

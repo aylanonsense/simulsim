@@ -29,8 +29,8 @@ local simulationDefinition = simulsim.defineSimulation({
   update = function(self, dt)
     for _, entity in ipairs(self.entities) do
       local inputs = self.inputs[entity.clientId] or {}
-      entity.x = entity.x + 100 * dt * ((inputs.right and 1 or 0) - (inputs.left and 1 or 0))
-      entity.y = entity.y + 100 * dt * ((inputs.down and 1 or 0) - (inputs.up and 1 or 0))
+      entity.x = math.min(math.max(0, entity.x + 100 * dt * ((inputs.right and 1 or 0) - (inputs.left and 1 or 0))), 280)
+      entity.y = math.min(math.max(0, entity.y + 100 * dt * ((inputs.down and 1 or 0) - (inputs.up and 1 or 0))), 280)
     end
   end
 })
@@ -42,41 +42,43 @@ function isEntityUsingClientSidePrediction(self, entity)
   return entity.clientId == self.clientId
 end
 
-function love.load()
-  -- Create a new network
-  network = simulsim.createNetwork({
-    simulationDefinition = simulationDefinition,
-    mode = MODE,
-    numClients = 2
+-- Create a new network
+network = simulsim.createNetwork({
+  simulationDefinition = simulationDefinition,
+  mode = MODE,
+  numClients = 2
+})
+-- Start the network
+network.server:startListening()
+network.server:onConnect(function(client)
+  print('SERVER: Client ' .. client.clientId .. ' connected on frame ' .. network.server:getSimulation().frame)
+  network.server:fireEvent('spawn-player-entity', {
+    clientId = client.clientId,
+    x = math.random(10, 270),
+    y = math.random(60, 270),
+    color = { math.random(), math.random(), math.random() }
   })
-  -- Start the network
-  network.server:startListening()
-  network.server:onConnect(function(client)
-    network.server:fireEvent('spawn-player-entity', {
-      clientId = client.clientId,
-      x = math.random(10, 270),
-      y = math.random(60, 270),
-      color = { math.random(), math.random(), math.random() }
-    })
-  end)
-  if network.clients[1] then
-    network.clients[1].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
-    network.clients[1]:simulateNetworkConditions({
-      latency = 100,
-      latencyDeviation = 10,
-      packetLossChance = 0.00
-    })
-    network.clients[1]:connect()
-  end
-  if network.clients[2] then
-    network.clients[2].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
-    network.clients[2]:simulateNetworkConditions({
-      latency = 1000,
-      latencyDeviation = 100,
-      packetLossChance = 0.00
-    })
-    network.clients[2]:connect()
-  end
+end)
+network.client:onConnect(function()
+  print('CLIENT: Connected to server as client ' .. network.client.clientId .. ' on frame ' .. network.client:getSimulation().frame)
+end)
+if network.clients[1] then
+  network.clients[1].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
+  network.clients[1]:simulateNetworkConditions({
+    latency = 300,
+    latencyDeviation = 100,
+    packetLossChance = 0.00
+  })
+  network.clients[1]:connect()
+end
+if network.clients[2] then
+  network.clients[2].isEntityUsingClientSidePrediction = isEntityUsingClientSidePrediction
+  network.clients[2]:simulateNetworkConditions({
+    latency = 1000,
+    latencyDeviation = 150,
+    packetLossChance = 0.00
+  })
+  -- network.clients[2]:connect()
 end
 
 function love.update(dt)
@@ -131,6 +133,31 @@ function love.keypressed(key)
       color = { math.random(), math.random(), math.random() }
     })
   end
+  if key == 't' then
+    for i = 1, 1000 do
+      network.server:update(1 / 60)
+    end
+  end
+  if key == '1' then
+    network.clients[1]:simulateNetworkConditions({
+      latency = 100
+    })
+  end
+  if key == '2' then
+    network.clients[1]:simulateNetworkConditions({
+      latency = 300
+    })
+  end
+  if key == '3' then
+    network.clients[1]:simulateNetworkConditions({
+      latency = 750
+    })
+  end
+  if key == '4' then
+    network.clients[1]:simulateNetworkConditions({
+      latency = 1500
+    })
+  end
 end
 
 function drawSimulation(sim, client, x, y, width, height, fullRender, title)
@@ -153,7 +180,7 @@ function drawSimulation(sim, client, x, y, width, height, fullRender, title)
     love.graphics.print(title, x + 4, y + 2)
     love.graphics.print('sim time: ' .. math.floor(sim.frame / 60), x + 4, y + 18)
     if client then
-      love.graphics.print('status: ' .. (client:isConnected() and 'connected' or (client:isConnecting() and 'connecting' or 'disconnected')), x + 4, y + 34)
+      love.graphics.print('status: ' .. (client:isSynced() and 'synced' or (client:isConnected() and 'syncing' or (client:isConnecting() and 'connecting' or 'disconnected'))), x + 4, y + 34)
       love.graphics.print('client id: ' .. (client.clientId or '--'), x + 4, y + 50)
       love.graphics.print('latency: ' .. client:getFramesOfLatency() .. ' frames', x + 4, y + 66)
     end

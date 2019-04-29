@@ -19,9 +19,11 @@ function createNetwork(params)
     return createInMemoryNetwork(params)
   -- Create a localhost network using share.lua, though others won't be able to join
   elseif mode == 'localhost' then
+    USE_CASTLE_CONFIG = false
     return createLocalhostShareNetwork(params)
   -- Create a fully multiplayer network using share.lua which will require a dedicated server
   elseif mode == 'multiplayer' then
+    USE_CASTLE_CONFIG = true
     -- We're on the server, so just create a server network
     if CASTLE_SERVER then
       return createServerSideShareNetwork(params)
@@ -91,9 +93,9 @@ function createInMemoryNetwork(params)
 
     -- Public methods
     update = function(self, dt)
-      self.server:update(dt)
+      local df = self.server:update(dt)
       for _, client in ipairs(self.clients) do
-        client:update(dt)
+        client:update(dt, df)
       end
       for _, transportStream in ipairs(self._transportStreams) do
         transportStream:update(dt)

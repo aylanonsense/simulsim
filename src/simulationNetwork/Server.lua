@@ -9,7 +9,7 @@ function Client:new(params)
   local server = params.server
   local clientId = params.clientId
   local connId = params.connId
-  local framesBetweenFlushes = params.framesBetweenFlushes or 0
+  local framesBetweenFlushes = params.framesBetweenFlushes or 3
   local framesBetweenSnapshots = params.framesBetweenSnapshots or 25
 
   return {
@@ -100,6 +100,8 @@ function Server:new(params)
   local listener = params.listener
   local initialState = params.initialState
   local simulationDefinition = params.simulationDefinition
+  local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
+  local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
 
   -- Create the simulation
   local simulation = simulationDefinition:new({
@@ -107,7 +109,7 @@ function Server:new(params)
   })
   local runner = SimulationRunner:new({
     simulation = simulation,
-    framesOfHistory = 0
+    framesOfHistory = maxClientEventFramesLate + 1
   })
 
   -- Wrap the listener in a message server to make it easier to work with
@@ -116,6 +118,10 @@ function Server:new(params)
   })
 
   local server = {
+    -- Private config vars
+    _maxClientEventFramesLate = maxClientEventFramesLate,
+    _maxClientEventFramesEarly = maxClientEventFramesEarly,
+
     -- Private vars
     _messageServer = messageServer,
     _nextClientId = 1,
@@ -162,14 +168,17 @@ function Server:new(params)
     getSimulation = function(self)
       return self._simulation
     end,
-    update = function(self, dt)
-      -- Update the simulation (via the simulation runner)
-      local df = self._runner:update(dt)
-      -- Update all clients
+    update = function(self, dt, df)
+      -- Update the underlying messaging server
       self._messageServer:update(dt)
+      -- Update the simulation via the simulation runner
+      df = self._runner:update(dt, df)
+      -- Update all clients
       for _, client in ipairs(self._clients) do
         client:update(dt, df)
       end
+      -- Return the number of frames that have been advanced
+      return df
     end,
 
     -- Overridable methods
@@ -239,7 +248,7 @@ function Server:new(params)
           -- TODO reject if too far in the past
           -- TODO update frame if in the past and adjusting is allowed
           local eventApplied = false
-          if event.frame > self._simulation.frame and self:shouldAcceptEventFromClient(client, event) then
+          if self._simulation.frame - self._maxClientEventFramesLate < event.frame and event.frame <= self._simulation.frame + 1 + self._maxClientEventFramesEarly and self:shouldAcceptEventFromClient(client, event) then
             -- Apply the event server-side and let all clients know about it
             eventApplied = self:_applyEvent(event)
           end

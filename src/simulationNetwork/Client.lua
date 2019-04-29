@@ -10,8 +10,9 @@ function Client:new(params)
   params = params or {}
   local conn = params.conn
   local simulationDefinition = params.simulationDefinition
-  local framesBetweenFlushes = params.framesBetweenFlushes or 0
+  local framesBetweenFlushes = params.framesBetweenFlushes or 3
   local framesBetweenPings = params.framesBetweenPings or 15
+  local maxFramesOfLatency = params.maxFramesOfLatency or 180
 
   -- Create a simulation for the client and a runner for it
   local clientRunner = SimulationRunner:new({
@@ -23,11 +24,12 @@ function Client:new(params)
 
   -- Create offset optimizers to minimize time desync and latency
   local timeSyncOptimizer = OffsetOptimizer:new({
-    minOffsetBeforeImmediateCorrection = 0
+    minOffsetBeforeImmediateCorrection = 0,
+    maxOffsetBeforeImmediateCorrection = 20
   })
   local latencyOptimizer = OffsetOptimizer:new({
     minOffsetBeforeImmediateCorrection = 0,
-    maxOffsetBeforeImmediateCorrection = 10
+    maxOffsetBeforeImmediateCorrection = 20
   })
 
   -- Wrap the raw connection in a message client to make it easier to work with
@@ -39,8 +41,11 @@ function Client:new(params)
     -- Private config vars
     _framesBetweenPings = framesBetweenPings,
     _framesBetweenFlushes = framesBetweenFlushes,
+    _maxFramesOfLatency = maxFramesOfLatency,
 
     -- Private vars
+    _hasSyncedTime = false,
+    _hasSyncedLatency = false,
     _messageClient = messageClient,
     _clientRunner = clientRunner,
     _serverRunner = serverRunner,
@@ -70,6 +75,9 @@ function Client:new(params)
     end,
     isConnecting = function(self)
       return self._messageClient:isConnecting()
+    end,
+    isSynced = function(self)
+      return self._hasSyncedTime and self._hasSyncedLatency
     end,
     fireEvent = function(self, eventType, eventData, params)
       params = params or {}
@@ -123,43 +131,65 @@ function Client:new(params)
     getSimulationWithoutPrediction = function(self)
       return self._serverRunner:getSimulation()
     end,
-    update = function(self, dt)
+    update = function(self, dt, df)
+      -- Update the underlying messaging client
       self._messageClient:update(dt)
       -- Update the simulation (via the simulation runner)
-      local df = self._clientRunner:update(dt)
-      self._serverRunner:update(dt)
-      -- Update the timing and latency optimizers
-      self._timeSyncOptimizer:update(dt, df)
-      self._latencyOptimizer:update(dt, df)
-      -- Rewind or fast forward the simulation to get it synced with the server
-      local timeAdjustment = self._timeSyncOptimizer:getRecommendedAdjustment()
-      if timeAdjustment ~= 0 then
-        -- TODO handle excessively large time adjustments
-        if timeAdjustment > 0 then
-          self._clientRunner:fastForward(timeAdjustment)
-          self._serverRunner:fastForward(timeAdjustment)
-        elseif timeAdjustment < 0 then
-          self._clientRunner:rewind(-timeAdjustment)
-          self._serverRunner:rewind(-timeAdjustment)
+      df = self._clientRunner:update(dt, df)
+      self._serverRunner:update(dt, df)
+      if self._messageClient:isConnected() then
+        -- Update the timing and latency optimizers
+        self._timeSyncOptimizer:update(dt, df)
+        self._latencyOptimizer:update(dt, df)
+        -- Rewind or fast forward the simulation to get it synced with the server
+        local timeAdjustment = self._timeSyncOptimizer:getRecommendedAdjustment()
+        if self._hasSyncedTime and timeAdjustment then
+          if timeAdjustment > 90 or timeAdjustment < -90 then
+            self:_handleDesync()
+          elseif timeAdjustment ~= 0 then
+            if timeAdjustment > 0 then
+              local fastForward1Successful = self._clientRunner:fastForward(timeAdjustment)
+              local fastForward2Successful = self._serverRunner:fastForward(timeAdjustment)
+              if not fastForward1Successful or not fastForward2Successful then
+                self:_handleDesync()
+              end
+            elseif timeAdjustment < 0 then
+              local rewind1Successful = self._clientRunner:rewind(-timeAdjustment)
+              local rewind2Successful = self._serverRunner:rewind(-timeAdjustment)
+              if not rewind1Successful or not rewind2Successful then
+                self:_handleDesync()
+              end
+            end
+            if self._hasSyncedTime then
+              self._timeSyncOptimizer:reset()
+              if -5 < timeAdjustment and timeAdjustment < 5 then
+                self._framesOfLatency = math.min(math.max(0, self._framesOfLatency - timeAdjustment), self._maxFramesOfLatency)
+                self._latencyOptimizer:reset()
+              end
+              self._syncId = stringUtils.generateRandomString(6)
+            end
+          end
         end
-        self._timeSyncOptimizer:reset()
-        local latencyAdjustment = -math.min(self._framesOfLatency, timeAdjustment)
-        self._framesOfLatency = self._framesOfLatency + latencyAdjustment
-        self._syncId = stringUtils.generateRandomString(6)
-        self._latencyOptimizer:reset()
-      end
-      -- Adjust latency to ensure messages are arriving on time server-side
-      local latencyAdjustment = self._latencyOptimizer:getRecommendedAdjustment()
-      if latencyAdjustment ~= 0 then
-        self._framesOfLatency = math.max(0, self._framesOfLatency - latencyAdjustment)
-        self._syncId = stringUtils.generateRandomString(6)
-        self._latencyOptimizer:reset()
-      end
-      -- Send a lazy ping every so often to guage latency accuracy
-      self._framesUntilNextPing = self._framesUntilNextPing - df
-      if self._framesUntilNextPing <= 0 then
-        self._framesUntilNextPing = self._framesBetweenPings
-        self:_ping()
+        -- Adjust latency to ensure messages are arriving on time server-side
+        local latencyAdjustment = self._latencyOptimizer:getRecommendedAdjustment()
+        if self._hasSyncedTime and latencyAdjustment then
+          if latencyAdjustment > 90 or latencyAdjustment < -90 then
+            self:_handleDesync()
+          else
+            self._hasSyncedLatency = true
+            if self._hasSyncedTime and latencyAdjustment ~= 0 then
+              self._framesOfLatency = math.min(math.max(0, self._framesOfLatency - latencyAdjustment), self._maxFramesOfLatency)
+              self._syncId = stringUtils.generateRandomString(6)
+              self._latencyOptimizer:reset()
+            end
+          end
+        end
+        -- Send a lazy ping every so often to gauge latency accuracy
+        self._framesUntilNextPing = self._framesUntilNextPing - df
+        if self._framesUntilNextPing <= 0 then
+          self._framesUntilNextPing = self._framesBetweenPings
+          self:_ping()
+        end
       end
       -- Flush the client's messages every so often
       self._framesUntilNextFlush = self._framesUntilNextFlush - df
@@ -174,6 +204,8 @@ function Client:new(params)
         self._clientRunner.framesOfHistory = math.min(self._framesOfLatency + 10, 300)
       end
       self._serverRunner.framesOfHistory = self._clientRunner.framesOfHistory
+      -- Return the number of frames that have been advanced
+      return df
     end,
     simulateNetworkConditions = function(self, params)
       self._messageClient:simulateNetworkConditions(params)
@@ -196,18 +228,29 @@ function Client:new(params)
       self.clientId = connectionData[1]
       self.data = connectionData[2]
       self._framesOfLatency = 45
-      self._syncId = stringUtils.generateRandomString(6)
-      self._framesUntilNextPing = 0
-      self._framesUntilNextFlush = 0
-      -- Set the initial state of the client-side simulation
-      self._clientRunner:reset()
-      self._clientRunner:setState(connectionData[3])
-      self._serverRunner:reset()
-      self._serverRunner:setState(connectionData[3])
+      self:_syncWithState(connectionData[3])
       -- Trigger connect callbacks
       for _, callback in ipairs(self._connectCallbacks) do
         callback()
       end
+    end,
+    _syncWithState = function(self, state)
+      self._hasSyncedTime = true
+      self._hasSyncedLatency = false
+      self._syncId = stringUtils.generateRandomString(6)
+      self._framesUntilNextPing = 0
+      self._framesUntilNextFlush = 0
+      self._timeSyncOptimizer:reset()
+      self._latencyOptimizer:reset()
+      -- Set the state of the client-side simulation
+      self._clientRunner:reset()
+      self._clientRunner:setState(state)
+      self._serverRunner:reset()
+      self._serverRunner:setState(state)
+    end,
+    _handleDesync = function(self)
+      self._hasSyncedTime = false
+      self._hasSyncedLatency = false
     end,
     _handleConnectFailure = function(self, reason)
       -- Trigger connect failure callbacks
@@ -220,6 +263,8 @@ function Client:new(params)
       self.data = {}
       self._framesOfLatency = 0
       self._syncId = nil
+      self._hasSyncedTime = false
+      self._hasSyncedLatency = false
       -- Trigger dicconnect callbacks
       for _, callback in ipairs(self._disconnectCallbacks) do
         callback(reason or 'Connection terminated')
@@ -237,67 +282,72 @@ function Client:new(params)
       end
     end,
     _handleReceiveEvent = function(self, event)
-      self:_recordTimeSyncOffset(event)
-      self:_recordLatencyOffset(event)
+      self:_recordTimeSyncOffset(event.frame)
+      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
       self:_applyEvent(event)
     end,
     _handleRejectEvent = function(self, event)
-      self:_recordLatencyOffset(event)
+      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
       self:_unapplyEvent(event)
     end,
     _handlePingResponse = function(self, ping)
-      self:_recordTimeSyncOffset(ping)
-      self:_recordLatencyOffset(ping)
+      self:_recordTimeSyncOffset(ping.frame)
+      self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata)
     end,
     _handleStateSnapshot = function(self, state)
-      self._serverRunner:applyState(state)
-      -- Predict the future game state based on where the server is right now
-      local futureRunner = self._serverRunner:clone()
-      futureRunner:fastForward(self._framesOfLatency)
-      local presentSimulation = self._serverRunner:getSimulation()
-      local futureSimulation = futureRunner:getSimulation()
-      -- Use that to construct a state for the client predicted simulation
-      local frame = presentSimulation.frame
-      local inputs = tableUtils.cloneTable(presentSimulation.inputs)
-      inputs[self.clientId] = futureSimulation.inputs[self.clientId]
-      local data = self:syncSimulationData(presentSimulation.data, futureSimulation.data)
-      local entities = {}
-      -- Handle entities that exist in the future and may or may not exist currently
-      for _, futureEntity in ipairs(futureSimulation.entities) do
-        local entityId = futureSimulation:getEntityId(futureEntity)
-        local futureState = futureSimulation:getStateFromEntity(futureEntity)
-        local presentEntity = presentSimulation:getEntityById(entityId)
-        local presentState = nil
-        if presentEntity then
-          presentState = presentSimulation:getStateFromEntity(presentEntity)
-        end
-        -- Decide whether to use the future state or present state for the entity
-        local state = self:syncEntityState(futureEntity, presentState, futureState)
-        if state then
-          table.insert(entities, state)
-        end
-      end
-      -- Handle entities that exist now but not in the future
-      for _, presentEntity in ipairs(presentSimulation.entities) do
-        local entityId = presentSimulation:getEntityId(presentEntity)
-        local futureEntity = futureSimulation:getEntityById(entityId)
-        if not futureEntity then
-          local presentState = presentSimulation:getStateFromEntity(presentEntity)
-          local state = self:syncEntityState(presentEntity, presentState, nil)
+      if not self._hasSyncedTime then
+        self:_syncWithState(state)
+      else
+        self:_recordTimeSyncOffset(state.frame)
+        self._serverRunner:applyState(state)
+        -- Predict the future game state based on where the server is right now
+        local futureRunner = self._serverRunner:clone()
+        futureRunner:fastForward(self._framesOfLatency)
+        local presentSimulation = self._serverRunner:getSimulation()
+        local futureSimulation = futureRunner:getSimulation()
+        -- Use that to construct a state for the client predicted simulation
+        local frame = presentSimulation.frame
+        local inputs = tableUtils.cloneTable(presentSimulation.inputs)
+        inputs[self.clientId] = futureSimulation.inputs[self.clientId]
+        local data = self:syncSimulationData(presentSimulation.data, futureSimulation.data)
+        local entities = {}
+        -- Handle entities that exist in the future and may or may not exist currently
+        for _, futureEntity in ipairs(futureSimulation.entities) do
+          local entityId = futureSimulation:getEntityId(futureEntity)
+          local futureState = futureSimulation:getStateFromEntity(futureEntity)
+          local presentEntity = presentSimulation:getEntityById(entityId)
+          local presentState = nil
+          if presentEntity then
+            presentState = presentSimulation:getStateFromEntity(presentEntity)
+          end
+          -- Decide whether to use the future state or present state for the entity
+          local state = self:syncEntityState(futureEntity, presentState, futureState)
           if state then
             table.insert(entities, state)
           end
         end
+        -- Handle entities that exist now but not in the future
+        for _, presentEntity in ipairs(presentSimulation.entities) do
+          local entityId = presentSimulation:getEntityId(presentEntity)
+          local futureEntity = futureSimulation:getEntityById(entityId)
+          if not futureEntity then
+            local presentState = presentSimulation:getStateFromEntity(presentEntity)
+            local state = self:syncEntityState(presentEntity, presentState, nil)
+            if state then
+              table.insert(entities, state)
+            end
+          end
+        end
+        -- Assemble the idealized state that features client-side prediction
+        local state = {
+          frame = frame,
+          inputs = inputs,
+          data = data,
+          entities = entities
+        }
+        -- Apply this to the client runner
+        self._clientRunner:applyState(state)
       end
-      -- Assemble the idealized state that features client-side prediction
-      local state = {
-        frame = frame,
-        inputs = inputs,
-        data = data,
-        entities = entities
-      }
-      -- Apply this to the client runner
-      self._clientRunner:applyState(state)
     end,
     _applyEvent = function(self, event)
       self._serverRunner:applyEvent(event)
@@ -326,15 +376,17 @@ function Client:new(params)
       }
       return obj
     end,
-    _recordTimeSyncOffset = function(self, msg)
-      if msg.clientMetadata and msg.clientMetadata.clientId == self.clientId and msg.clientMetadata.syncId == self._syncId then
-        self._timeSyncOptimizer:recordOffset(msg.frame - self._clientRunner:getSimulation().frame - 1)
+    _recordTimeSyncOffset = function(self, frame)
+      if self._hasSyncedTime then
+        self._timeSyncOptimizer:recordOffset(frame - self._clientRunner:getSimulation().frame - 1)
       end
     end,
-    _recordLatencyOffset = function(self, msg)
-      if msg.clientMetadata and msg.clientMetadata.clientId == self.clientId and msg.clientMetadata.syncId == self._syncId then
-        if msg.serverMetadata and msg.serverMetadata.frameReceived then
-          self._latencyOptimizer:recordOffset(msg.clientMetadata.expectedFrameReceived - msg.serverMetadata.frameReceived)
+    _recordLatencyOffset = function(self, clientMetadata, serverMetadata)
+      if self._hasSyncedTime then
+        if clientMetadata and clientMetadata.clientId == self.clientId and clientMetadata.syncId == self._syncId then
+          if serverMetadata and serverMetadata.frameReceived then
+            self._latencyOptimizer:recordOffset(clientMetadata.expectedFrameReceived - serverMetadata.frameReceived)
+          end
         end
       end
     end,

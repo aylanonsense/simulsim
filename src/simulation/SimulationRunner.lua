@@ -5,14 +5,17 @@ local SimulationRunner = {}
 function SimulationRunner:new(params)
   params = params or {}
   local simulation = params.simulation
+  local frameRate = params.frameRate or 60
   local framesOfHistory = params.framesOfHistory or 30
   local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 5
 
   return {
     -- Private config vars
+    _frameRate = frameRate,
     _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
 
     -- Private vars
+    _leftoverTime = 1 / (2 * frameRate),
     _simulation = simulation,
     _futureStates = {},
     _stateHistory = {},
@@ -125,13 +128,24 @@ function SimulationRunner:new(params)
         return true
       end
     end,
-    update = function(self, dt)
-      -- TODO take dt into account
-      self:_moveSimulationForwardOneFrame(true, true)
-      self:_removeOldHistory()
-      self:_autoUnapplyEvents()
+    update = function(self, dt, df)
+      -- Figure out how many frames to advance
+      if not df then
+        df = 0
+        self._leftoverTime = self._leftoverTime + dt
+        while self._leftoverTime > 1 / self._frameRate do
+          self._leftoverTime = self._leftoverTime - 1 / self._frameRate
+          df = df + 1
+        end
+      end
+      -- Advance the simulation forward that many frames
+      for i = 1, df do
+        self:_moveSimulationForwardOneFrame(true, true)
+        self:_removeOldHistory()
+        self:_autoUnapplyEvents()
+      end
       -- Return the number of frames that have been advanced
-      return 1
+      return df
     end,
     reset = function(self)
       self._simulation:reset()
@@ -221,7 +235,7 @@ function SimulationRunner:new(params)
     end,
     -- Advances the simulation forward one frame
     _moveSimulationForwardOneFrame = function(self, isTopFrame, shouldGenerateStateSnapshots)
-      local dt = 1 / 60
+      local dt = 1 / self._frameRate
       -- Advance the simulation's time
       self._simulation.frame = self._simulation.frame + 1
       -- Get the events that take place on this frame

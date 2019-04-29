@@ -1,13 +1,12 @@
 local marshal = require 'marshal'
 local share = require 'src/lib/share'
-local stringUtils = require 'src/utils/string'
 
 --- Creates a new server-side connection listener that can have multiple client-side connections connect to it
 local ShareConnectionListener = {}
 function ShareConnectionListener:new(params)
   params = params or {}
   local isLocalhost = params.isLocalhost ~= false
-  local port = '' .. (params.port or 22122)
+  local port = params.port or 22122
 
   local listener = {
     -- Private vars
@@ -23,7 +22,7 @@ function ShareConnectionListener:new(params)
       -- Start a localhost server
       if self._isLocalhost then
         share.server.enabled = true
-        share.server.start(self._port)
+        share.server.start('' .. self._port)
       -- Start a proper dedicated server
       else
         share.server.useCastleConfig()

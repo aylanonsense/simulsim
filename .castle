@@ -1,0 +1,9 @@
+---
+main: example.lua
+name: simulsim example
+username: bridgs
+primaryColor: FF00FF
+coverImage: cover-image.png
+description: Just testing
+multiplayer:
+    - enabled: true

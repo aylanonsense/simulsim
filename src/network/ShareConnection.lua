@@ -1,6 +1,5 @@
 local marshal = require 'marshal'
 local share = require 'src/lib/share'
-local stringUtils = require 'src/utils/string'
 
 --- Creates a new client-side connection that's able to connect to a server
 local ShareConnection = {}
