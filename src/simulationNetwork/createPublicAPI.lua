@@ -93,6 +93,9 @@ function createPublicAPI(network)
     end
   end
 
+  -- Start the server
+  server:startListening()
+
   -- Return APIs
   return serverAPI, clientAPIs[1], clientAPIs
 end
@@ -122,12 +125,6 @@ function createServerAPI(server, isServerSide)
     -- Functions to call
     isServerSide = function()
       return isServerSide
-    end,
-    startListening = function()
-      server:startListening()
-    end,
-    isListening = function()
-      return server:isListening()
     end,
     getClients = function()
       return clients
