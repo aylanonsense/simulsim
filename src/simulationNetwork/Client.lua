@@ -70,11 +70,11 @@ function Client:new(params)
     disconnect = function(self, reason)
       self._messageClient:disconnect(reason)
     end,
-    isConnected = function(self)
-      return self._messageClient:isConnected()
-    end,
     isConnecting = function(self)
       return self._messageClient:isConnecting()
+    end,
+    isConnected = function(self)
+      return self._messageClient:isConnected()
     end,
     isSynced = function(self)
       return self._hasSyncedTime and self._hasSyncedLatency
@@ -214,13 +214,10 @@ function Client:new(params)
       return self._framesOfLatency
     end,
     syncEntityState = function(self, entity, presentState, futureState)
-      return self:isEntityUsingClientSidePrediction(entity) and futureState or presentState
+      return presentState
     end,
     syncSimulationData = function(self, presentData, futureData)
       return futureData
-    end,
-    isEntityUsingClientSidePrediction = function(self, entity)
-      return false
     end,
 
     -- Private methods

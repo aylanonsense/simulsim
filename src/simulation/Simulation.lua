@@ -110,6 +110,9 @@ function Simulation:new(params)
         self:setState(self._initialState)
       end
     end,
+    getClientInputs = function(self, clientId)
+      return self.inputs[clientId]
+    end,
     -- Generates a new entity id
     generateEntityId = function(self)
       local entityId = self._entityIdPrefix .. self._nextEntityId

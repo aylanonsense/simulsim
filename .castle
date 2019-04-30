@@ -1,5 +1,5 @@
 ---
-main: example.lua
+main: new-api.lua
 name: simulsim example
 username: bridgs
 primaryColor: FF00FF

@@ -64,7 +64,7 @@ function Client:new(params)
       end
     end,
     _sendStateSnapshot = function(self)
-      self._messageServer:buffer(self._connId, { 'state-snapshot', self._server:getSimulation():getState() })
+      self._messageServer:buffer(self._connId, { 'state-snapshot', self._server:generateStateSnapshotForClient(self) })
     end,
     _sendPingResponse = function(self, pingResponse)
       self._messageServer:buffer(self._connId, { 'ping-response', pingResponse })
@@ -194,6 +194,9 @@ function Server:new(params)
     shouldAcceptEventFromClient = function(self, client, event)
       return true
     end,
+    generateStateSnapshotForClient = function(self, client)
+      return self._simulation:getState()
+    end,
 
     -- Private methods
     _getClientByConnId = function(self, connId)
@@ -219,10 +222,12 @@ function Server:new(params)
         connId = connId
       })
       local accept2 = function(clientData)
+        -- Add the client data
+        client.data = clientData
         -- Insert the client into the list of clients
         table.insert(self._clients, client)
         -- Accept the connection
-        accept({ clientId, clientData or {}, self._simulation:getState() })
+        accept({ clientId, clientData or {}, self:generateStateSnapshotForClient(client) })
         -- Trigger connect callbacks
         for _, callback in ipairs(self._connectCallbacks) do
           callback(client)
