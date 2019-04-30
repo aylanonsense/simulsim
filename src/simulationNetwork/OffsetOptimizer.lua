@@ -64,7 +64,7 @@ function OffsetOptimizer:new(params)
     reset = function(self)
       self._records = {}
     end,
-    update = function(self, dt, df)
+    moveForwardOneFrame = function(self, dt)
       -- If we haven't had any records for a while, we should keep the historical records around for longer
       local numSequentialFramesWithoutRecords = 0
       for i = 1, #self._records do
@@ -77,10 +77,10 @@ function OffsetOptimizer:new(params)
       if numSequentialFramesWithoutRecords < self._maxSequentialFramesWithoutRecords  then
         -- Get rid of the older records and make space for newer ones
         for i = self._numFramesOfHistory, 1, -1 do
-          if i <= df then
+          if i <= 1 then
             self._records[i] = false
           else
-            self._records[i] = self._records[i - df]
+            self._records[i] = self._records[i - 1]
           end
         end
       end

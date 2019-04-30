@@ -131,16 +131,18 @@ function Client:new(params)
     getSimulationWithoutPrediction = function(self)
       return self._serverRunner:getSimulation()
     end,
-    update = function(self, dt, df)
+    update = function(self, dt)
       -- Update the underlying messaging client
       self._messageClient:update(dt)
+    end,
+    moveForwardOneFrame = function(self, dt)
       -- Update the simulation (via the simulation runner)
-      df = self._clientRunner:update(dt, df)
-      self._serverRunner:update(dt, df)
+      self._clientRunner:moveForwardOneFrame(dt)
+      self._serverRunner:moveForwardOneFrame(dt)
       if self._messageClient:isConnected() then
         -- Update the timing and latency optimizers
-        self._timeSyncOptimizer:update(dt, df)
-        self._latencyOptimizer:update(dt, df)
+        self._timeSyncOptimizer:moveForwardOneFrame(dt)
+        self._latencyOptimizer:moveForwardOneFrame(dt)
         -- Rewind or fast forward the simulation to get it synced with the server
         local timeAdjustment = self._timeSyncOptimizer:getRecommendedAdjustment()
         if self._hasSyncedTime and timeAdjustment then
@@ -185,14 +187,14 @@ function Client:new(params)
           end
         end
         -- Send a lazy ping every so often to gauge latency accuracy
-        self._framesUntilNextPing = self._framesUntilNextPing - df
+        self._framesUntilNextPing = self._framesUntilNextPing - 1
         if self._framesUntilNextPing <= 0 then
           self._framesUntilNextPing = self._framesBetweenPings
           self:_ping()
         end
       end
       -- Flush the client's messages every so often
-      self._framesUntilNextFlush = self._framesUntilNextFlush - df
+      self._framesUntilNextFlush = self._framesUntilNextFlush - 1
       if self._framesUntilNextFlush <= 0 then
         self._framesUntilNextFlush = self._framesBetweenFlushes
         self._messageClient:flush()
@@ -204,8 +206,6 @@ function Client:new(params)
         self._clientRunner.framesOfHistory = math.min(self._framesOfLatency + 10, 300)
       end
       self._serverRunner.framesOfHistory = self._clientRunner.framesOfHistory
-      -- Return the number of frames that have been advanced
-      return df
     end,
     simulateNetworkConditions = function(self, params)
       self._messageClient:simulateNetworkConditions(params)

@@ -4,7 +4,7 @@ local simulsim = require 'simulsim'
 local gameDef = simulsim.defineGame({
   update = function(self, dt)
     for _, entity in ipairs(self.entities) do
-      local inputs = self:getClientInputs(entity.clientId) or {}
+      local inputs = self.inputs[entity.clientId] or {}
       entity.x = math.min(math.max(0, entity.x + 100 * dt * ((inputs.right and 1 or 0) - (inputs.left and 1 or 0))), 280)
       entity.y = math.min(math.max(0, entity.y + 100 * dt * ((inputs.down and 1 or 0) - (inputs.up and 1 or 0))), 280)
     end
@@ -82,7 +82,11 @@ function server.clientconnected(client)
 end
 
 -- Manually call load methods for now
-server.load()
+if server.load then
+  server.load()
+end
 for _, client in ipairs(clients) do
-  client.load()
+  if client.load then
+    client.load()
+  end
 end

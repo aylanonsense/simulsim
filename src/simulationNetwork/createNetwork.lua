@@ -93,12 +93,18 @@ function createInMemoryNetwork(params)
 
     -- Public methods
     update = function(self, dt)
-      local df = self.server:update(dt)
+      self.server:update(dt)
       for _, client in ipairs(self.clients) do
-        client:update(dt, df)
+        client:update(dt)
       end
       for _, transportStream in ipairs(self._transportStreams) do
         transportStream:update(dt)
+      end
+    end,
+    moveForwardOneFrame = function(self, dt)
+      self.server:moveForwardOneFrame(dt)
+      for _, client in ipairs(self.clients) do
+        client:moveForwardOneFrame(dt)
       end
     end,
     isServerSide = function(self)
@@ -146,6 +152,10 @@ function createLocalhostShareNetwork(params)
       self.client:update(dt)
       share.update(dt)
     end,
+    moveForwardOneFrame = function(self, dt)
+      self.server:moveForwardOneFrame(dt)
+      self.client:moveForwardOneFrame(dt)
+    end,
     isServerSide = function(self)
       return true
     end,
@@ -182,6 +192,9 @@ function createServerSideShareNetwork(params)
       self.server:update(dt)
       share.update(dt)
     end,
+    moveForwardOneFrame = function(self, dt)
+      self.server:moveForwardOneFrame(dt)
+    end,
     isServerSide = function(self)
       return true
     end,
@@ -217,6 +230,9 @@ function createClientSideShareNetwork(params)
     update = function(self, dt)
       self.client:update(dt)
       share.update(dt)
+    end,
+    moveForwardOneFrame = function(self, dt)
+      self.client:moveForwardOneFrame(dt)
     end,
     isServerSide = function(self)
       return false

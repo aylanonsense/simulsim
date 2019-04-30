@@ -38,10 +38,11 @@ function Client:new(params)
     isConnected = function(self)
       return self._messageServer:isConnected(self._connId)
     end,
-    update = function(self, dt, df)
+    update = function(dt) end,
+    moveForwardOneFrame = function(self, dt)
       -- Send a snapshot of the simulation state every so often
       if self._framesBetweenSnapshots > 0 then
-        self._framesUntilNextSnapshot = self._framesUntilNextSnapshot - df
+        self._framesUntilNextSnapshot = self._framesUntilNextSnapshot - 1
         if self._framesUntilNextSnapshot <= 0 then
           self._framesUntilNextSnapshot = self._framesBetweenSnapshots
           self:_sendStateSnapshot()
@@ -49,7 +50,7 @@ function Client:new(params)
       end
       -- Flush the client's messages every so often
       if self._framesBetweenFlushes > 0 then
-        self._framesUntilNextFlush = self._framesUntilNextFlush - df
+        self._framesUntilNextFlush = self._framesUntilNextFlush - 1
         if self._framesUntilNextFlush <= 0 then
           self._framesUntilNextFlush = self._framesBetweenFlushes
           self._messageServer:flush(self._connId)
@@ -168,17 +169,21 @@ function Server:new(params)
     getSimulation = function(self)
       return self._simulation
     end,
-    update = function(self, dt, df)
+    update = function(self, dt)
       -- Update the underlying messaging server
       self._messageServer:update(dt)
-      -- Update the simulation via the simulation runner
-      df = self._runner:update(dt, df)
       -- Update all clients
       for _, client in ipairs(self._clients) do
-        client:update(dt, df)
+        client:update(dt)
       end
-      -- Return the number of frames that have been advanced
-      return df
+    end,
+    moveForwardOneFrame = function(self, dt)
+      -- Update the simulation via the simulation runner
+      self._runner:moveForwardOneFrame(dt)
+      -- Update all clients
+      for _, client in ipairs(self._clients) do
+        client:moveForwardOneFrame(dt)
+      end
     end,
 
     -- Overridable methods

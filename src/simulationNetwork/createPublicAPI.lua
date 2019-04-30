@@ -1,3 +1,4 @@
+local FRAME_RATE = 60
 local LOVE_METHODS = {
   -- load = { server = true, client = true },
   -- update = { server = true, client = true },
@@ -63,17 +64,30 @@ function createPublicAPI(network)
     end
   end
 
+  -- Bind update event
+  local leftoverTime = 1 / (2 * FRAME_RATE)
   love.update = function(dt)
-    network:update(dt)
-    if network:isServerSide() then
-      if serverAPI.update then
-        serverAPI.update(dt)
-      end
+    -- Figure out how many frames have passed
+    local df = 0
+    leftoverTime = leftoverTime + dt
+    while leftoverTime > 1 / FRAME_RATE do
+      leftoverTime = leftoverTime - 1 / FRAME_RATE
+      df = df + 1
     end
-    if network:isClientSide() then
-      for _, clientAPI in ipairs(clientAPIs) do
-        if clientAPI.update then
-          clientAPI.update(dt)
+    -- Update everything for each frame that has passed
+    network:update(dt)
+    for f = 1, df do
+      network:moveForwardOneFrame(1 / FRAME_RATE)
+      if network:isServerSide() then
+        if serverAPI.update then
+          serverAPI.update(1 / FRAME_RATE)
+        end
+      end
+      if network:isClientSide() then
+        for _, clientAPI in ipairs(clientAPIs) do
+          if clientAPI.update then
+            clientAPI.update(1 / FRAME_RATE)
+          end
         end
       end
     end
