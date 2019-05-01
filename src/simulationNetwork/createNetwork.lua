@@ -1,5 +1,4 @@
 -- Load dependencies
-local share = require 'src/lib/share'
 local LocalTransportStream = require 'src/network/LocalTransportStream'
 local LocalConnectionListener = require 'src/network/LocalConnectionListener'
 local LocalConnection = require 'src/network/LocalConnection'
@@ -150,7 +149,6 @@ function createLocalhostShareNetwork(params)
     update = function(self, dt)
       self.server:update(dt)
       self.client:update(dt)
-      share.update(dt)
     end,
     moveForwardOneFrame = function(self, dt)
       self.server:moveForwardOneFrame(dt)
@@ -190,7 +188,6 @@ function createServerSideShareNetwork(params)
     -- Public methods
     update = function(self, dt)
       self.server:update(dt)
-      share.update(dt)
     end,
     moveForwardOneFrame = function(self, dt)
       self.server:moveForwardOneFrame(dt)
@@ -229,7 +226,6 @@ function createClientSideShareNetwork(params)
     -- Public methods
     update = function(self, dt)
       self.client:update(dt)
-      share.update(dt)
     end,
     moveForwardOneFrame = function(self, dt)
       self.client:moveForwardOneFrame(dt)

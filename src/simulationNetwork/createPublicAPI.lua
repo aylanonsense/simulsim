@@ -1,6 +1,6 @@
 local FRAME_RATE = 60
 local LOVE_METHODS = {
-  -- load = { server = true, client = true },
+  load = { server = true, client = true },
   -- update = { server = true, client = true },
   draw = { client = true },
   lowmemory = { server = true, client = true },
@@ -46,6 +46,7 @@ function createPublicAPI(network)
 
   -- Bind events
   for cbName, where in pairs(LOVE_METHODS) do
+    local cb = love[cbName]
     love[cbName] = function(...)
       if where.server and network:isServerSide() then
         local serverCb = serverAPI[cbName]
@@ -61,12 +62,19 @@ function createPublicAPI(network)
           end
         end
       end
+      if cb then
+        cb(...)
+      end
     end
   end
 
   -- Bind update event
   local leftoverTime = 1 / (2 * FRAME_RATE)
-  love.update = function(dt)
+  local cb = love.update
+  love.update = function(dt, ...)
+    if cb then
+      cb(dt, ...)
+    end
     -- Figure out how many frames have passed
     local df = 0
     leftoverTime = leftoverTime + dt
@@ -94,7 +102,16 @@ function createPublicAPI(network)
   end
 
   -- Start the server
-  server:startListening()
+  if network:isServerSide() then
+    network.server:startListening()
+  end
+
+  -- Connect the clients to the server
+  if network:isClientSide() then
+    for _, client in ipairs(network.clients) do
+      client:connect()
+    end
+  end
 
   -- Return APIs
   return serverAPI, clientAPIs[1], clientAPIs
@@ -202,6 +219,8 @@ function createClientAPI(client, isClientSide)
     connected = function() end,
     connectfailed = function(reason) end,
     disconnected = function(reason) end,
+    synced = function() end,
+    desynced = function() end,
 
     -- Functions that configure client behavior
     syncGameData = function(presentData, futureData)
@@ -217,9 +236,6 @@ function createClientAPI(client, isClientSide)
     -- Functions to call
     isClientSide = function()
       return isClientSide
-    end,
-    connect = function(handshake)
-      client:connect(handshake)
     end,
     disconnect = function(reason)
       client:disconnect(reason)
@@ -265,9 +281,15 @@ function createClientAPI(client, isClientSide)
     api.connectfailed(reason)
   end)
   client:onDisconnect(function(reason)
+    api.disconnected(reason)
     api.clientId = client.clientId
     api.data = client.data
-    api.disconnected(reason)
+  end)
+  client:onSync(function()
+    api.synced()
+  end)
+  client:onDesync(function()
+    api.desynced()
   end)
 
   -- Override client methods

@@ -1,7 +1,7 @@
 local LocalTransportStream = {}
 function LocalTransportStream:new(params)
   params = params or {}
-  local latency = params.latency or 0
+  local latency = params.latency or 1
   local latencyDeviation = params.latencyDeviation or 0
   local packetLossChance = params.packetLossChance or 0
 
@@ -48,7 +48,7 @@ function LocalTransportStream:new(params)
     simulateNetworkConditions = function(self, params)
       params = params or {}
       if params.latency then
-        self._latency = params.latency
+        self._latency = math.max(1, params.latency)
       end
       if params.latencyDeviation then
         self._latencyDeviation = params.latencyDeviation

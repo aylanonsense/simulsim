@@ -34,7 +34,8 @@ local server, client, clients = simulsim.createGameNetwork({
 
 -- Connect the client to the server
 function client.load()
-  client.connect()
+  print('client.load')
+  -- client.connect()
 end
 
 -- Move by pressing left/right
@@ -49,6 +50,11 @@ end
 
 -- Change colors by pressing the C key
 function client.keypressed(key)
+  print('keypressed yay')
+  if key == 'z' then
+    print('connectin')
+    client.connect()
+  end
   if key == 'c' then
     client.fireEvent('change-color', { clientId = client.clientId, color = { math.random(), math.random(), math.random() } })
   end
@@ -68,7 +74,7 @@ end
 
 -- Start the server
 function server.load()
-  server.startListening()
+  print('server.load')
 end
 
 -- Whenever a client connects, spawn an entity for that player

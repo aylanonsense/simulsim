@@ -4,12 +4,7 @@ local cs = require 'https://raw.githubusercontent.com/castle-games/share.lua/34c
 local client = cs.client
 local server = cs.server
 
--- We'll call share.lua's update method manually, so override it
-local update = love.update
-function love.update() end
-
 return {
   client = client,
-  server = server,
-  update = update
+  server = server
 }

@@ -58,6 +58,8 @@ function Client:new(params)
     _connectCallbacks = {},
     _connectFailureCallbacks = {},
     _disconnectCallbacks = {},
+    _syncCallbacks = {},
+    _desyncCallbacks = {},
 
     -- Public vars
     clientId = nil,
@@ -136,6 +138,7 @@ function Client:new(params)
       self._messageClient:update(dt)
     end,
     moveForwardOneFrame = function(self, dt)
+      local wasSynced = self._hasSyncedTime and self._hasSyncedLatency
       -- Update the simulation (via the simulation runner)
       self._clientRunner:moveForwardOneFrame(dt)
       self._serverRunner:moveForwardOneFrame(dt)
@@ -183,6 +186,11 @@ function Client:new(params)
               self._framesOfLatency = math.min(math.max(0, self._framesOfLatency - latencyAdjustment), self._maxFramesOfLatency)
               self._syncId = stringUtils.generateRandomString(6)
               self._latencyOptimizer:reset()
+            end
+            if not wasSynced then
+              for _, callback in ipairs(self._syncCallbacks) do
+                callback()
+              end
             end
           end
         end
@@ -246,8 +254,14 @@ function Client:new(params)
       self._serverRunner:setState(state)
     end,
     _handleDesync = function(self)
+      local wasSynced = self._hasSyncedTime and self._hasSyncedLatency
       self._hasSyncedTime = false
       self._hasSyncedLatency = false
+      if wasSynced then
+        for _, callback in ipairs(self._desyncCallbacks) do
+          callback()
+        end
+      end
     end,
     _handleConnectFailure = function(self, reason)
       -- Trigger connect failure callbacks
@@ -397,6 +411,12 @@ function Client:new(params)
     end,
     onDisconnect = function(self, callback)
       table.insert(self._disconnectCallbacks, callback)
+    end,
+    onSync = function(self, callback)
+      table.insert(self._syncCallbacks, callback)
+    end,
+    onDesync = function(self, callback)
+      table.insert(self._desyncCallbacks, callback)
     end
   }
 
