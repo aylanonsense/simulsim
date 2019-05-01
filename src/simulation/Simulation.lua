@@ -86,8 +86,17 @@ function Simulation:new(params)
       table.insert(self.entities, entity)
       return entity
     end,
+    -- Despawns an entity
+    despawnEntity = function(self, entity)
+      for i = #self.entities, 1, -1 do
+        if self:getEntityId(self.entities[i]) == self:getEntityId(entity) then
+          table.remove(self.entities, i)
+          return entity
+        end
+      end
+    end,
     -- Despawns an entity with the given id and returns the removed entity
-    despawnEntity = function(self, entityId)
+    despawnEntityById = function(self, entityId)
       for i = #self.entities, 1, -1 do
         local entity = self.entities[i]
         if self:getEntityId(entity) == entityId then
