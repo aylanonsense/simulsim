@@ -221,11 +221,8 @@ function Client:new(params)
     getFramesOfLatency = function(self)
       return self._framesOfLatency
     end,
-    syncEntityState = function(self, entity, presentState, futureState)
-      return presentState
-    end,
-    syncSimulationData = function(self, presentData, futureData)
-      return futureData
+    isEntityUsingClientSidePrediction = function(self, entity)
+      return entity.clientId == self.clientId
     end,
 
     -- Private methods
@@ -310,54 +307,79 @@ function Client:new(params)
         self:_syncWithState(state)
       else
         self:_recordTimeSyncOffset(state.frame)
+        -- state represents what the game would currently look like with no client-side prediction
         self._serverRunner:applyState(state)
-        -- Predict the future game state based on where the server is right now
-        local futureRunner = self._serverRunner:clone()
-        futureRunner:fastForward(self._framesOfLatency)
-        local presentSimulation = self._serverRunner:getSimulation()
-        local futureSimulation = futureRunner:getSimulation()
-        -- Use that to construct a state for the client predicted simulation
-        local frame = presentSimulation.frame
-        local inputs = tableUtils.cloneTable(presentSimulation.inputs)
-        inputs[self.clientId] = futureSimulation.inputs[self.clientId]
-        local data = self:syncSimulationData(presentSimulation.data, futureSimulation.data)
-        local entities = {}
-        -- Handle entities that exist in the future and may or may not exist currently
-        for _, futureEntity in ipairs(futureSimulation.entities) do
-          local entityId = futureSimulation:getEntityId(futureEntity)
-          local futureState = futureSimulation:getStateFromEntity(futureEntity)
-          local presentEntity = presentSimulation:getEntityById(entityId)
-          local presentState = nil
-          if presentEntity then
-            presentState = presentSimulation:getStateFromEntity(presentEntity)
-          end
-          -- Decide whether to use the future state or present state for the entity
-          local state = self:syncEntityState(futureEntity, presentState, futureState)
-          if state then
-            table.insert(entities, state)
-          end
-        end
-        -- Handle entities that exist now but not in the future
-        for _, presentEntity in ipairs(presentSimulation.entities) do
-          local entityId = presentSimulation:getEntityId(presentEntity)
-          local futureEntity = futureSimulation:getEntityById(entityId)
-          if not futureEntity then
-            local presentState = presentSimulation:getStateFromEntity(presentEntity)
-            local state = self:syncEntityState(presentEntity, presentState, nil)
-            if state then
-              table.insert(entities, state)
+        -- Create a new simulation from the snapshot
+        local snapshotSimulation = simulationDefinition:new({
+          initialState = state
+        })
+        self.lastSnapshot = snapshotSimulation -- DEBUG
+        -- Fix client-predicted inconsistencies in the past
+        self._clientRunner:applyStateTransform(snapshotSimulation.frame - self._framesOfLatency, function(simulation)
+          -- Apply client's inputs to past state
+          simulation.inputs[self.clientId] = tableUtils.cloneTable(snapshotSimulation.inputs[self.clientId])
+          -- Apply client-predicted entity states to past state
+          local entityExists = {}
+          for _, entity in ipairs(snapshotSimulation.entities) do
+            if self:isEntityUsingClientSidePrediction(entity) then
+              local id = snapshotSimulation:getEntityId(entity)
+              entityExists[id] = true
+              local entity2, index = simulation:getEntityById(id)
+              -- Replace entity states
+              if entity2 then
+                if simulation:isSyncEnabledForEntity(entity2) and snapshotSimulation:isSyncEnabledForEntity(entity) then
+                  simulation.entities[index] = simulation:createEntityFromState(snapshotSimulation:getStateFromEntity(entity))
+                end
+              -- Spawn missing entities
+              else
+                if snapshotSimulation:isSyncEnabledForEntity(entity) then
+                  table.insert(simulation.entities, simulation:createEntityFromState(snapshotSimulation:getStateFromEntity(entity)))
+                end
+              end
             end
           end
-        end
-        -- Assemble the idealized state that features client-side prediction
-        local state = {
-          frame = frame,
-          inputs = inputs,
-          data = data,
-          entities = entities
-        }
-        -- Apply this to the client runner
-        self._clientRunner:applyState(state)
+          -- Despawn client-predicted entities that shouldn't exist
+          for i = #simulation.entities, 1, -1 do
+            local id = simulation:getEntityId(simulation.entities[i])
+            if self:isEntityUsingClientSidePrediction(simulation.entities[i]) and not entityExists[id] and simulation:isSyncEnabledForEntity(simulation.entities[i]) then
+              table.remove(simulation.entities, i)
+            end
+          end
+        end)
+        -- Fix non-predicted inconsistencies in the present
+        self._clientRunner:applyStateTransform(snapshotSimulation.frame, function(simulation)
+          -- Apply non-predicted inputs to past state
+          local clientPredictedInputs = simulation.inputs[self.clientId]
+          simulation.inputs = tableUtils.cloneTable(snapshotSimulation.inputs)
+          simulation.inputs[self.clientId] = clientPredictedInputs
+          -- Apply non-predicted entity states to past state
+          local entityExists = {}
+          for _, entity in ipairs(snapshotSimulation.entities) do
+            if not self:isEntityUsingClientSidePrediction(entity) then
+              local id = snapshotSimulation:getEntityId(entity)
+              entityExists[id] = true
+              local entity2, index = simulation:getEntityById(id)
+              -- Replace entity states
+              if entity2 then
+                if simulation:isSyncEnabledForEntity(entity2) then
+                  simulation.entities[index] = simulation:createEntityFromState(snapshotSimulation:getStateFromEntity(entity))
+                end
+              -- Spawn missing entities
+              else
+                if snapshotSimulation:isSyncEnabledForEntity(entity) then
+                  table.insert(simulation.entities, simulation:createEntityFromState(snapshotSimulation:getStateFromEntity(entity)))
+                end
+              end
+            end
+          end
+          -- Despawn non-predicted entities that shouldn't exist
+          for i = #simulation.entities, 1, -1 do
+            local id = simulation:getEntityId(simulation.entities[i])
+            if not self:isEntityUsingClientSidePrediction(simulation.entities[i]) and not entityExists[id] and simulation:isSyncEnabledForEntity(simulation.entities[i]) then
+              table.remove(simulation.entities, i)
+            end
+          end
+        end)
       end
     end,
     _applyEvent = function(self, event)

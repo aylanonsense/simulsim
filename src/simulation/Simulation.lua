@@ -67,9 +67,9 @@ function Simulation:new(params)
     end,
     -- Gets an entity with the given id
     getEntityById = function(self, entityId)
-      for _, entity in ipairs(self.entities) do
+      for index, entity in ipairs(self.entities) do
         if self:getEntityId(entity) == entityId then
-          return entity
+          return entity, index
         end
       end
     end,
@@ -139,7 +139,29 @@ function Simulation:new(params)
     end,
     -- Transforms a simple state object into a fully-hydrated entity
     createEntityFromState = function(self, state)
-      return state
+      return tableUtils.cloneTable(state)
+    end,
+    enableEntitySync = function(self, entity)
+      entity.metadata = entity.metadata or {}
+      entity.metadata.syncDisabled = false
+    end,
+    disableEntitySync = function(self, entity)
+      entity.metadata = entity.metadata or {}
+      entity.metadata.syncDisabled = true
+    end,
+    temporarilyDisableEntitySync = function(self, entity)
+      entity.metadata = entity.metadata or {}
+      entity.metadata.framesOfSyncDisabled = 60
+    end,
+    updateMetadata = function(self, dt)
+      for _, entity in ipairs(self.entities) do
+        if entity.metadata and entity.metadata.framesOfSyncDisabled and entity.metadata.framesOfSyncDisabled > 0 then
+          entity.metadata.framesOfSyncDisabled = entity.metadata.framesOfSyncDisabled - 1
+        end
+      end
+    end,
+    isSyncEnabledForEntity = function(self, entity)
+      return not entity.metadata or (not entity.metadata.syncDisabled and (not entity.metadata.framesOfSyncDisabled or entity.metadata.framesOfSyncDisabled <= 0))
     end,
 
     -- Methods to override
@@ -162,7 +184,7 @@ function Simulation:define(params)
   local handleEvent = params.handleEvent or noop
 
   return {
-    new = function(params)
+    new = function(self, params)
       params = params or {}
       params.initialState = params.initialState or initialState
       -- Create a new simulation

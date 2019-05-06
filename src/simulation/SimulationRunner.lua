@@ -15,6 +15,7 @@ function SimulationRunner:new(params)
     -- Private vars
     _simulation = simulation,
     _futureStates = {},
+    _transformHistory = {},
     _stateHistory = {},
     _eventHistory = {},
 
@@ -114,7 +115,7 @@ function SimulationRunner:new(params)
         local currFrame = self._simulation.frame
         if self:_rewindToFrame(state.frame) then
           self:setState(state)
-          self:_fastForwardToFrame(currFrame)
+          self:_fastForwardToFrame(currFrame, true)
           return true
         else
           return false
@@ -122,6 +123,25 @@ function SimulationRunner:new(params)
       -- Otherwise if the state represents a moment in the future, schedule it
       else
         table.insert(self._futureStates, state)
+        return true
+      end
+    end,
+    applyStateTransform = function(self, frame, transformFunc)
+      table.insert(self._transformHistory, { frame = frame, transform = transformFunc })
+      -- If this is a moment in the past, rewind to apply it
+      if frame <= self._simulation.frame then
+        local currFrame = self._simulation.frame
+        if self:_rewindToFrame(frame) then
+          transformFunc(self._simulation)
+          self:_invalidateStateHistoryOnOrAfterFrame(self._simulation.frame)
+          self:_generateStateSnapshot()
+          self:_fastForwardToFrame(currFrame, true)
+          return true
+        else
+          return false
+        end
+      -- Otherwise, it's scheduled to happen
+      else
         return true
       end
     end,
@@ -133,6 +153,7 @@ function SimulationRunner:new(params)
     reset = function(self)
       self._simulation:reset()
       self._futureStates = {}
+      self._transformHistory = {}
       self._stateHistory = {}
       self._eventHistory = {}
     end,
@@ -157,6 +178,7 @@ function SimulationRunner:new(params)
       })
       -- Set the runner's private vars
       clonedRunner._futureStates = tableUtils.cloneTable(self._futureStates)
+      clonedRunner._transformHistory = tableUtils.cloneTable(self._transformHistory)
       clonedRunner._stateHistory = tableUtils.cloneTable(self._stateHistory)
       clonedRunner._eventHistory = tableUtils.cloneTable(self._eventHistory)
       -- Return the newly-cloned runner
@@ -235,6 +257,7 @@ function SimulationRunner:new(params)
       end
       -- Update the simulation
       self._simulation:resetEntityIdGeneration('frame-' .. self._simulation.frame .. '-')
+      self._simulation:updateMetadata(dt)
       self._simulation:update(dt, self._simulation.inputs, nonInputEvents, isTopFrame)
       -- Check to see if any scheduled states need to applied now
       for i = #self._futureStates, 1, -1 do
@@ -243,6 +266,12 @@ function SimulationRunner:new(params)
         end
         if self._futureStates[i].frame <= self._simulation.frame then
           table.remove(self._futureStates, i)
+        end
+      end
+      -- Check to see if any scheduled transformations need to applied now
+      for i = #self._transformHistory, 1, -1 do
+        if self._transformHistory[i].frame == self._simulation.frame then
+          self._transformHistory[i].transform(self._simulation)
         end
       end
       -- Generate a snapshot of the state every so often
@@ -266,6 +295,12 @@ function SimulationRunner:new(params)
       for i = #self._stateHistory, 1, -1 do
         if self._stateHistory[i].frame < self._simulation.frame - self.framesOfHistory - self._framesBetweenStateSnapshots then
           table.remove(self._stateHistory, i)
+        end
+      end
+      -- Remove old transformation history
+      for i = #self._transformHistory, 1, -1 do
+        if self._transformHistory[i].frame < self._simulation.frame - self.framesOfHistory - self._framesBetweenStateSnapshots then
+          table.remove(self._transformHistory, i)
         end
       end
       -- Remove old event history

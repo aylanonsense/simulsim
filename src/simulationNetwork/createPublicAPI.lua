@@ -212,6 +212,7 @@ end
 function createClientAPI(client, isClientSide)
   local api
   api = {
+    _client = client,
     clientId = client.clientId,
     data = client.data,
 
@@ -221,17 +222,6 @@ function createClientAPI(client, isClientSide)
     disconnected = function(reason) end,
     synced = function() end,
     desynced = function() end,
-
-    -- Functions that configure client behavior
-    syncGameData = function(presentData, futureData)
-      return futureData
-    end,
-    syncEntityState = function(entity, presentState, futureState)
-      return api.isEntityUsingClientSidePrediction(entity) and futureState or presentState
-    end,
-    isEntityUsingClientSidePrediction = function(entity)
-      return entity.clientId == client.clientId
-    end,
 
     -- Functions to call
     isClientSide = function()
@@ -293,12 +283,12 @@ function createClientAPI(client, isClientSide)
   end)
 
   -- Override client methods
-  client.syncSimulationData = function(self, presentData, futureData)
-    return api.syncGameData(presentData, futureData)
-  end
-  client.syncEntityState = function(self, entity, presentState, futureState)
-    return api.syncEntityState(entity, presentState, futureState)
-  end
+  -- client.syncSimulationData = function(self, presentData, futureData)
+  --   return api.syncGameData(presentData, futureData)
+  -- end
+  -- client.syncEntityState = function(self, entity, presentState, futureState)
+  --   return api.syncEntityState(entity, presentState, futureState)
+  -- end
 
   return api
 end
