@@ -13,10 +13,6 @@ function ServerSideGameClient:new(params)
   local framesBetweenSnapshots = params.framesBetweenSnapshots or 25
 
   return {
-    -- Private config vars
-    _framesBetweenFlushes = framesBetweenFlushes,
-    _framesBetweenSnapshots = framesBetweenSnapshots,
-
     -- Private vars
     _server = server,
     _messageServer = server._messageServer,
@@ -24,6 +20,8 @@ function ServerSideGameClient:new(params)
     _framesUntilNextFlush = 0,
     _framesUntilNextSnapshot = 0,
     _disconnectCallbacks = {},
+    _framesBetweenFlushes = framesBetweenFlushes,
+    _framesBetweenSnapshots = framesBetweenSnapshots,
 
     -- Public vars
     clientId = clientId,
@@ -99,15 +97,12 @@ local GameServer = {}
 function GameServer:new(params)
   params = params or {}
   local listener = params.listener
-  local initialState = params.initialState
   local simulationDefinition = params.simulationDefinition
   local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
 
   -- Create the simulation
-  local simulation = simulationDefinition:new({
-    initialState = initialState
-  })
+  local simulation = simulationDefinition:new()
   local runner = SimulationRunner:new({
     simulation = simulation,
     framesOfHistory = maxClientEventFramesLate + 1
@@ -119,16 +114,14 @@ function GameServer:new(params)
   })
 
   local server = {
-    -- Private config vars
-    _maxClientEventFramesLate = maxClientEventFramesLate,
-    _maxClientEventFramesEarly = maxClientEventFramesEarly,
-
     -- Private vars
     _messageServer = messageServer,
     _nextClientId = 1,
     _clients = {},
     _simulation = simulation,
     _runner = runner,
+    _maxClientEventFramesLate = maxClientEventFramesLate,
+    _maxClientEventFramesEarly = maxClientEventFramesEarly,
     _connectCallbacks = {},
 
     -- Public methods
@@ -201,6 +194,11 @@ function GameServer:new(params)
     end,
     generateStateSnapshotForClient = function(self, client)
       return self._simulation:getState()
+    end
+
+    -- Callback methods
+    onConnect = function(self, callback)
+      table.insert(self._connectCallbacks, callback)
     end,
 
     -- Private methods
@@ -286,11 +284,6 @@ function GameServer:new(params)
       else
         return false
       end
-    end,
-
-    -- Callback methods
-    onConnect = function(self, callback)
-      table.insert(self._connectCallbacks, callback)
     end
   }
 

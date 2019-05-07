@@ -4,13 +4,9 @@ local tableUtils = require 'src/utils/table'
 function noop() end
 
 local Game = {}
-function Game:new(params)
-  params = params or {}
-  local initialState = params.initialState
-
+function Game:new()
   local simulation = {
     -- Private vars
-    _initialState = initialState,
     _entityIdPrefix = '',
     _nextEntityId = 1,
 
@@ -115,9 +111,6 @@ function Game:new(params)
       self.inputs = {}
       self.data = {}
       self.entities = {}
-      if self._initialState then
-        self:setState(self._initialState)
-      end
     end,
     -- Generates a new entity id
     generateEntityId = function(self)
@@ -169,26 +162,18 @@ function Game:new(params)
     handleEvent = function(self, eventType, eventData) end
   }
 
-  -- Set the simulation's initial state
-  if initialState then
-    simulation:setState(initialState)
-  end
-
   -- Return the new simulation
   return simulation
 end
 function Game:define(params)
   params = params or {}
-  local initialState = params.initialState
   local update = params.update or noop
   local handleEvent = params.handleEvent or noop
 
   return {
-    new = function(self, params)
-      params = params or {}
-      params.initialState = params.initialState or initialState
+    new = function(self)
       -- Create a new simulation
-      local simulation = Game:new(params)
+      local simulation = Game:new()
       -- Override the overridable methods
       simulation.update = update
       simulation.handleEvent = handleEvent

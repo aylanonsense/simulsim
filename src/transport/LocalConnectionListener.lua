@@ -35,6 +35,17 @@ function LocalConnectionListener:new()
       end
     end,
 
+    -- Callback methods
+    onConnect = function(self, callback)
+      table.insert(self._connectCallbacks, callback)
+    end,
+    onDisconnect = function(self, callback)
+      table.insert(self._disconnectCallbacks, callback)
+    end,
+    onReceive = function(self, callback)
+      table.insert(self._receiveCallbacks, callback)
+    end,
+
     -- Extra method to allow faux connections to be passed to the listener
     handleConnect = function(self, conn)
       local connId = self._nextConnId
@@ -56,17 +67,6 @@ function LocalConnectionListener:new()
       for _, callback in ipairs(self._connectCallbacks) do
         callback(connId)
       end
-    end,
-
-    -- Callback methods
-    onConnect = function(self, callback)
-      table.insert(self._connectCallbacks, callback)
-    end,
-    onDisconnect = function(self, callback)
-      table.insert(self._disconnectCallbacks, callback)
-    end,
-    onReceive = function(self, callback)
-      table.insert(self._receiveCallbacks, callback)
     end
   }
 end

@@ -11,7 +11,8 @@ function OffsetOptimizer:new(params)
   local numLargestRecordsToIgnore = numLargestRecordsToIgnore or 5
 
   local optimizer = {
-    -- Private config vars
+    -- Private vars
+    _records = {},
     _numFramesOfHistory = numFramesOfHistory,
     _minPermissableOffset = minPermissableOffset,
     _maxPermissableOffset = maxPermissableOffset,
@@ -20,9 +21,6 @@ function OffsetOptimizer:new(params)
     _maxSequentialFramesWithoutRecords = maxSequentialFramesWithoutRecords,
     _numSmallestRecordsToIgnore = numSmallestRecordsToIgnore,
     _numLargestRecordsToIgnore = numLargestRecordsToIgnore,
-
-    -- Private vars
-    _records = {},
 
     -- Public methods
     -- Records an offset, e.g. negative means late, positive means early

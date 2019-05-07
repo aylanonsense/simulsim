@@ -9,15 +9,13 @@ function GameRunner:new(params)
   local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 5
 
   return {
-    -- Private config vars
-    _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
-
     -- Private vars
     _simulation = simulation,
     _futureStates = {},
     _transformHistory = {},
     _stateHistory = {},
     _eventHistory = {},
+    _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
 
     -- Public vars
     framesOfHistory = framesOfHistory,

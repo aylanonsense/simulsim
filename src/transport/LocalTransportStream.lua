@@ -5,15 +5,13 @@ function LocalTransportStream:new(params)
   local latencyDeviation = params.latencyDeviation or 0
   local packetLossChance = params.packetLossChance or 0
 
-  local transportLayer = {
-    -- Private config vars
-    _latency = latency,
-    _latencyDeviation = latencyDeviation,
-    _packetLossChance = packetLossChance,
-
+  return {
     -- Private vars
     _packets = {},
     _receiveCallbacks = {},
+    _latency = latency,
+    _latencyDeviation = latencyDeviation,
+    _packetLossChance = packetLossChance,
 
     -- Public methods
     send = function(self, msg, unlosable)
@@ -58,6 +56,11 @@ function LocalTransportStream:new(params)
       end
     end,
 
+    -- Callback methods
+    onReceive = function(self, callback)
+      table.insert(self._receiveCallbacks, callback)
+    end,
+
     -- Private methods
     _handleReceive = function(self, msg, unlosable)
       if unlosable or math.random() >= self._packetLossChance then
@@ -65,16 +68,8 @@ function LocalTransportStream:new(params)
           callback(msg)
         end
       end
-    end,
-
-    -- Callback methods
-    onReceive = function(self, callback)
-      table.insert(self._receiveCallbacks, callback)
     end
   }
-
-  -- Return the new transport layer
-  return transportLayer
 end
 
 return LocalTransportStream

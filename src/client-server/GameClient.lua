@@ -38,11 +38,6 @@ function GameClient:new(params)
   })
 
   local client = {
-    -- Private config vars
-    _framesBetweenPings = framesBetweenPings,
-    _framesBetweenFlushes = framesBetweenFlushes,
-    _maxFramesOfLatency = maxFramesOfLatency,
-
     -- Private vars
     _hasSyncedTime = false,
     _hasSyncedLatency = false,
@@ -55,6 +50,9 @@ function GameClient:new(params)
     _syncId = nil,
     _framesUntilNextPing = framesBetweenPings,
     _framesUntilNextFlush = framesBetweenFlushes,
+    _framesBetweenPings = framesBetweenPings,
+    _framesBetweenFlushes = framesBetweenFlushes,
+    _maxFramesOfLatency = maxFramesOfLatency,
     _connectCallbacks = {},
     _connectFailureCallbacks = {},
     _disconnectCallbacks = {},
@@ -310,9 +308,8 @@ function GameClient:new(params)
         -- state represents what the game would currently look like with no client-side prediction
         self._serverRunner:applyState(state)
         -- Create a new simulation from the snapshot
-        local snapshotSimulation = simulationDefinition:new({
-          initialState = state
-        })
+        local snapshotSimulation = simulationDefinition:new()
+        snapshotSimulation:setState(state)
         self.lastSnapshot = snapshotSimulation -- DEBUG
         -- Fix client-predicted inconsistencies in the past
         self._clientRunner:applyStateTransform(snapshotSimulation.frame - self._framesOfLatency, function(simulation)
