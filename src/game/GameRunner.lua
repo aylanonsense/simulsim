@@ -1,8 +1,8 @@
 local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
 
-local SimulationRunner = {}
-function SimulationRunner:new(params)
+local GameRunner = {}
+function GameRunner:new(params)
   params = params or {}
   local simulation = params.simulation
   local framesOfHistory = params.framesOfHistory or 30
@@ -171,7 +171,7 @@ function SimulationRunner:new(params)
     end,
     clone = function(self)
       -- Create a new runner
-      local clonedRunner = SimulationRunner:new({
+      local clonedRunner = GameRunner:new({
         simulation = self._simulation:clone(),
         framesOfHistory = self.framesOfHistory,
         framesBetweenStateSnapshots = self._framesBetweenStateSnapshots
@@ -332,4 +332,4 @@ function SimulationRunner:new(params)
   }
 end
 
-return SimulationRunner
+return GameRunner

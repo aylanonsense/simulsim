@@ -1,12 +1,12 @@
 -- Load dependencies
-local MessageClient = require 'src/network/MessageClient'
-local SimulationRunner = require 'src/simulation/SimulationRunner'
-local OffsetOptimizer = require 'src/simulationNetwork/OffsetOptimizer'
+local MessageClient = require 'src/client-server/MessageClient'
+local SimulationRunner = require 'src/game/GameRunner'
+local OffsetOptimizer = require 'src/transport/OffsetOptimizer'
 local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
 
-local Client = {}
-function Client:new(params)
+local GameClient = {}
+function GameClient:new(params)
   params = params or {}
   local conn = params.conn
   local simulationDefinition = params.simulationDefinition
@@ -459,4 +459,4 @@ function Client:new(params)
   return client
 end
 
-return Client
+return GameClient

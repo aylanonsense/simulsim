@@ -1,5 +1,5 @@
-local EmptyServer = {}
-function EmptyServer:new(params)
+local EmptyGameServer = {}
+function EmptyGameServer:new(params)
   return {
     -- Public methods
     startListening = function(self) end,
@@ -20,4 +20,4 @@ function EmptyServer:new(params)
   }
 end
 
-return EmptyServer
+return EmptyGameServer

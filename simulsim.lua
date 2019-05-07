@@ -1,6 +1,6 @@
-local Simulation = require 'src/simulation/Simulation'
-local createNetwork = require 'src/simulationNetwork/createNetwork'
-local createPublicAPI = require 'src/simulationNetwork/createPublicAPI'
+local Simulation = require 'src/game/Game'
+local createNetwork = require 'src/network/createNetwork'
+local createPublicAPI = require 'src/api/createPublicAPI'
 
 function defineGame(params)
   return Simulation:define(params)

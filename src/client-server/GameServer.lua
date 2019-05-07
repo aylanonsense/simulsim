@@ -1,10 +1,10 @@
 -- Load dependencies
-local MessageServer = require 'src/network/MessageServer'
-local SimulationRunner = require 'src/simulation/SimulationRunner'
+local MessageServer = require 'src/client-server/MessageServer'
+local SimulationRunner = require 'src/game/GameRunner'
 local stringUtils = require 'src/utils/string'
 
-local Client = {}
-function Client:new(params)
+local ServerSideGameClient = {}
+function ServerSideGameClient:new(params)
   params = params or {}
   local server = params.server
   local clientId = params.clientId
@@ -95,8 +95,8 @@ function Client:new(params)
 end
 
 -- The server, which manages connected clients
-local Server = {}
-function Server:new(params)
+local GameServer = {}
+function GameServer:new(params)
   params = params or {}
   local listener = params.listener
   local initialState = params.initialState
@@ -221,7 +221,7 @@ function Server:new(params)
       -- Create a new client
       local clientId = self._nextClientId
       self._nextClientId = self._nextClientId + 1
-      local client = Client:new({
+      local client = ServerSideGameClient:new({
         server = self,
         clientId = clientId,
         connId = connId
@@ -308,4 +308,4 @@ function Server:new(params)
   return server
 end
 
-return Server
+return GameServer

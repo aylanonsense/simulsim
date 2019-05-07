@@ -3,8 +3,8 @@ local tableUtils = require 'src/utils/table'
 -- Useful no-op method
 function noop() end
 
-local Simulation = {}
-function Simulation:new(params)
+local Game = {}
+function Game:new(params)
   params = params or {}
   local initialState = params.initialState
 
@@ -53,7 +53,7 @@ function Simulation:new(params)
     -- Creates another simulation identical to this one
     clone = function(self)
       -- Create a new simulation
-      local clonedSimulation = Simulation:new()
+      local clonedSimulation = Game:new()
       -- Copy all overrideable methods
       clonedSimulation.update = self.update
       clonedSimulation.handleEvent = self.handleEvent
@@ -177,7 +177,7 @@ function Simulation:new(params)
   -- Return the new simulation
   return simulation
 end
-function Simulation:define(params)
+function Game:define(params)
   params = params or {}
   local initialState = params.initialState
   local update = params.update or noop
@@ -188,7 +188,7 @@ function Simulation:define(params)
       params = params or {}
       params.initialState = params.initialState or initialState
       -- Create a new simulation
-      local simulation = Simulation:new(params)
+      local simulation = Game:new(params)
       -- Override the overridable methods
       simulation.update = update
       simulation.handleEvent = handleEvent
@@ -198,4 +198,4 @@ function Simulation:define(params)
   }
 end
 
-return Simulation
+return Game

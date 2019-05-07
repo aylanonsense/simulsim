@@ -1,5 +1,5 @@
-local EmptyClient = {}
-function EmptyClient:new()
+local EmptyGameClient = {}
+function EmptyGameClient:new()
   return {
     -- Public vars
     clientId = nil,
@@ -28,4 +28,4 @@ function EmptyClient:new()
   }
 end
 
-return EmptyClient
+return EmptyGameClient

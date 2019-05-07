@@ -1,13 +1,13 @@
 -- Load dependencies
-local LocalTransportStream = require 'src/network/LocalTransportStream'
-local LocalConnectionListener = require 'src/network/LocalConnectionListener'
-local LocalConnection = require 'src/network/LocalConnection'
-local ShareConnectionListener = require 'src/network/ShareConnectionListener'
-local ShareConnection = require 'src/network/ShareConnection'
-local Server = require 'src/simulationNetwork/Server'
-local Client = require 'src/simulationNetwork/Client'
-local EmptyServer = require 'src/simulationNetwork/EmptyServer'
-local EmptyClient = require 'src/simulationNetwork/EmptyClient'
+local LocalTransportStream = require 'src/transport/LocalTransportStream'
+local LocalConnectionListener = require 'src/transport/LocalConnectionListener'
+local LocalConnection = require 'src/transport/LocalConnection'
+local ShareConnectionListener = require 'src/transport/ShareConnectionListener'
+local ShareConnection = require 'src/transport/ShareConnection'
+local Server = require 'src/client-server/GameServer'
+local Client = require 'src/client-server/GameClient'
+local EmptyServer = require 'src/client-server/EmptyGameServer'
+local EmptyClient = require 'src/client-server/EmptyGameClient'
 
 function createNetwork(params)
   params = params or {}
