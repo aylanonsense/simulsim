@@ -15,12 +15,8 @@ function GameClient:new(params)
   local maxFramesOfLatency = params.maxFramesOfLatency or 180
 
   -- Create a game for the client and a runner for it
-  local clientRunner = GameRunner:new({
-    game = gameDefinition:new()
-  })
-  local serverRunner = GameRunner:new({
-    game = gameDefinition:new()
-  })
+  local runnerWithoutSmoothing = GameRunner:new({ game = gameDefinition:new() })
+  local runnerWithoutPrediction = GameRunner:new({ game = gameDefinition:new() })
 
   -- Create offset optimizers to minimize time desync and latency
   local timeSyncOptimizer = OffsetOptimizer:new({
@@ -33,21 +29,19 @@ function GameClient:new(params)
   })
 
   -- Wrap the raw connection in a message client to make it easier to work with
-  local messageClient = MessageClient:new({
-    conn = conn
-  })
+  local messageClient = MessageClient:new({ conn = conn })
 
   local client = {
     -- Private vars
+    _runnerWithoutSmoothing = runnerWithoutSmoothing,
+    _runnerWithoutPrediction = runnerWithoutPrediction,
     _hasSyncedTime = false,
     _hasSyncedLatency = false,
     _messageClient = messageClient,
-    _clientRunner = clientRunner,
-    _serverRunner = serverRunner,
     _timeSyncOptimizer = timeSyncOptimizer,
     _latencyOptimizer = latencyOptimizer,
-    _framesOfLatency = 0,
     _syncId = nil,
+    _framesOfLatency = 0,
     _framesUntilNextPing = framesBetweenPings,
     _framesUntilNextFlush = framesBetweenFlushes,
     _framesBetweenPings = framesBetweenPings,
@@ -62,6 +56,9 @@ function GameClient:new(params)
     -- Public vars
     clientId = nil,
     data = {},
+    game = runnerWithoutSmoothing.game, -- TODO actually have a smoothed runner + game
+    gameWithoutSmoothing = runnerWithoutSmoothing.game,
+    gameWithoutPrediction = runnerWithoutPrediction.game,
 
     -- Public methods
     connect = function(self, handshake)
@@ -79,6 +76,9 @@ function GameClient:new(params)
     isSynced = function(self)
       return self._hasSyncedTime and self._hasSyncedLatency
     end,
+    getFramesOfLatency = function(self)
+      return self._framesOfLatency
+    end,
     fireEvent = function(self, eventType, eventData, params)
       params = params or {}
       local isInputEvent = params.isInputEvent
@@ -87,7 +87,7 @@ function GameClient:new(params)
         -- Create a new event
         local event = self:_addClientMetadata({
           id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
-          frame = self._clientRunner:getGame().frame + self._framesOfLatency + 1,
+          frame = self.gameWithoutSmoothing.frame + self._framesOfLatency + 1,
           type = eventType,
           data = eventData,
           isInputEvent = isInputEvent
@@ -95,12 +95,12 @@ function GameClient:new(params)
         -- Apply a prediction of the event
         if predictClientSide then
           local serverEvent = tableUtils.cloneTable(event)
-          self._serverRunner:applyEvent(serverEvent, {
+          self._runnerWithoutPrediction:applyEvent(serverEvent, {
             framesUntilAutoUnapply = self._framesOfLatency + 5
           })
           local clientEvent = tableUtils.cloneTable(event)
-          clientEvent.frame = self._clientRunner:getGame().frame + 1
-          self._clientRunner:applyEvent(clientEvent, {
+          clientEvent.frame = self.gameWithoutSmoothing.frame + 1
+          self._runnerWithoutSmoothing:applyEvent(clientEvent, {
             framesUntilAutoUnapply = self._framesOfLatency + 5,
             preserveFrame = true
           })
@@ -125,12 +125,6 @@ function GameClient:new(params)
         }, params)
       end
     end,
-    getGame = function(self)
-      return self._clientRunner:getGame()
-    end,
-    getGameWithoutPrediction = function(self)
-      return self._serverRunner:getGame()
-    end,
     update = function(self, dt)
       -- Update the underlying messaging client
       self._messageClient:update(dt)
@@ -138,8 +132,8 @@ function GameClient:new(params)
     moveForwardOneFrame = function(self, dt)
       local wasSynced = self._hasSyncedTime and self._hasSyncedLatency
       -- Update the game (via the game runner)
-      self._clientRunner:moveForwardOneFrame(dt)
-      self._serverRunner:moveForwardOneFrame(dt)
+      self._runnerWithoutSmoothing:moveForwardOneFrame(dt)
+      self._runnerWithoutPrediction:moveForwardOneFrame(dt)
       if self._messageClient:isConnected() then
         -- Update the timing and latency optimizers
         self._timeSyncOptimizer:moveForwardOneFrame(dt)
@@ -151,14 +145,14 @@ function GameClient:new(params)
             self:_handleDesync()
           elseif timeAdjustment ~= 0 then
             if timeAdjustment > 0 then
-              local fastForward1Successful = self._clientRunner:fastForward(timeAdjustment)
-              local fastForward2Successful = self._serverRunner:fastForward(timeAdjustment)
+              local fastForward1Successful = self._runnerWithoutSmoothing:fastForward(timeAdjustment)
+              local fastForward2Successful = self._runnerWithoutPrediction:fastForward(timeAdjustment)
               if not fastForward1Successful or not fastForward2Successful then
                 self:_handleDesync()
               end
             elseif timeAdjustment < 0 then
-              local rewind1Successful = self._clientRunner:rewind(-timeAdjustment)
-              local rewind2Successful = self._serverRunner:rewind(-timeAdjustment)
+              local rewind1Successful = self._runnerWithoutSmoothing:rewind(-timeAdjustment)
+              local rewind2Successful = self._runnerWithoutPrediction:rewind(-timeAdjustment)
               if not rewind1Successful or not rewind2Successful then
                 self:_handleDesync()
               end
@@ -206,21 +200,69 @@ function GameClient:new(params)
         self._messageClient:flush()
       end
       -- Make sure we have enough recorded history to be operational
-      if self._clientRunner.framesOfHistory > math.max(self._framesOfLatency + 10, 30) then
-        self._clientRunner.framesOfHistory = self._clientRunner.framesOfHistory - 1
+      if self._runnerWithoutSmoothing.framesOfHistory > math.max(self._framesOfLatency + 10, 30) then
+        self._runnerWithoutSmoothing.framesOfHistory = self._runnerWithoutSmoothing.framesOfHistory - 1
       else
-        self._clientRunner.framesOfHistory = math.min(self._framesOfLatency + 10, 300)
+        self._runnerWithoutSmoothing.framesOfHistory = math.min(self._framesOfLatency + 10, 300)
       end
-      self._serverRunner.framesOfHistory = self._clientRunner.framesOfHistory
+      self._runnerWithoutPrediction.framesOfHistory = self._runnerWithoutSmoothing.framesOfHistory
     end,
     simulateNetworkConditions = function(self, params)
       self._messageClient:simulateNetworkConditions(params)
     end,
-    getFramesOfLatency = function(self)
-      return self._framesOfLatency
+
+    -- Overrideable methods
+    syncEntity = function(self, game, entity, candidateEntity, isPrediction)
+      local isEntityUsingPrediction
+      if entity then
+        isEntityUsingPrediction = game:isEntityUsingPrediction(entity, self.clientId)
+      else
+        isEntityUsingPrediction = game:isEntityUsingPrediction(candidateEntity, self.clientId)
+      end
+      if isEntityUsingPrediction == isPrediction then
+        return candidateEntity
+      else
+        return entity
+      end
     end,
-    isEntityUsingClientSidePrediction = function(self, entity)
-      return entity.clientId == self.clientId
+    syncInputs = function(self, game, inputs, candidateInputs, isPrediction)
+      if isPrediction then
+        inputs[self.clientId] = candidateInputs[self.clientId]
+        return inputs
+      else
+        candidateInputs[self.clientId] = inputs[self.clientId]
+        return candidateInputs
+      end
+    end,
+    syncData = function(self, game, data, candidateData, isPrediction)
+      if isPrediction then
+        return data
+      else
+        return candidateData
+      end
+    end,
+    smoothEntity = function(self, entity, idealEntity)
+      return idealEntity
+    end,
+    smoothData = function(self, data, idealData)
+      return idealData
+    end,
+
+    -- Callback methods
+    onConnect = function(self, callback)
+      table.insert(self._connectCallbacks, callback)
+    end,
+    onConnectFailure = function(self, callback)
+      table.insert(self._connectFailureCallbacks, callback)
+    end,
+    onDisconnect = function(self, callback)
+      table.insert(self._disconnectCallbacks, callback)
+    end,
+    onSync = function(self, callback)
+      table.insert(self._syncCallbacks, callback)
+    end,
+    onDesync = function(self, callback)
+      table.insert(self._desyncCallbacks, callback)
     end,
 
     -- Private methods
@@ -243,10 +285,10 @@ function GameClient:new(params)
       self._timeSyncOptimizer:reset()
       self._latencyOptimizer:reset()
       -- Set the state of the client-side game
-      self._clientRunner:reset()
-      self._clientRunner:setState(state)
-      self._serverRunner:reset()
-      self._serverRunner:setState(state)
+      self._runnerWithoutSmoothing:reset()
+      self._runnerWithoutSmoothing:setState(state)
+      self._runnerWithoutPrediction:reset()
+      self._runnerWithoutPrediction:setState(state)
     end,
     _handleDesync = function(self)
       local wasSynced = self._hasSyncedTime and self._hasSyncedLatency
@@ -300,92 +342,77 @@ function GameClient:new(params)
       self:_recordTimeSyncOffset(ping.frame)
       self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata)
     end,
+    _syncToTargetGame = function(self, sourceGame, targetGame, isPrediction)
+      -- Sync entities that exist in the target game
+      local entityExistsInTargetGame = {}
+      for _, targetEntity in ipairs(targetGame.entities) do
+        local id = targetGame:getEntityId(targetEntity)
+        entityExistsInTargetGame[id] = true
+        local sourceEntity, index = sourceGame:getEntityById(id)
+        local isSyncEnabled
+        if sourceEntity then
+          isSyncEnabled = sourceGame:isSyncEnabledForEntity(sourceEntity) and targetGame:isSyncEnabledForEntity(targetEntity)
+        else
+          isSyncEnabled = targetGame:isSyncEnabledForEntity(targetEntity)
+        end
+        if isSyncEnabled then
+          local syncedEntity = self:syncEntity(sourceGame, sourceEntity, targetEntity, isPrediction)
+          -- Entity was removed
+          if not syncedEntity and sourceEntity then
+            -- table.remove(sourceGame.entities, index)
+          -- Entity was added
+          elseif syncedEntity and not sourceEntity then
+            table.insert(sourceGame.entities, syncedEntity)
+          -- Entity was modified or swapped out
+          elseif syncedEntity and sourceEntity then
+            sourceGame.entities[index] = syncedEntity
+          end
+        end
+      end
+      -- Sync entities that don't exist in the target game
+      for index = #sourceGame.entities, 1, -1 do
+        local sourceEntity = sourceGame.entities[index]
+        local id = sourceGame:getEntityId(sourceEntity)
+        if not entityExistsInTargetGame[id] and sourceGame:isSyncEnabledForEntity(sourceEntity) then
+          local syncedEntity = self:syncEntity(sourceGame, sourceEntity, nil, isPrediction)
+          -- Entity was removed
+          if not syncedEntity then
+            -- table.remove(sourceGame.entities, index)
+          -- Entity was modified or swapped out
+          else
+            sourceGame.entities[index] = syncedEntity
+          end
+        end
+      end
+      -- Sync data
+      sourceGame.data = self:syncData(sourceGame, sourceGame.data, tableUtils.cloneTable(targetGame.data), isPrediction)
+      -- Sync inputs
+      sourceGame.inputs = self:syncInputs(sourceGame, sourceGame.inputs, tableUtils.cloneTable(targetGame.inputs), isPrediction)
+    end,
     _handleStateSnapshot = function(self, state)
       if not self._hasSyncedTime then
         self:_syncWithState(state)
       else
         self:_recordTimeSyncOffset(state.frame)
         -- state represents what the game would currently look like with no client-side prediction
-        self._serverRunner:applyState(state)
-        -- Create a new game from the snapshot
-        local snapshotGame = gameDefinition:new()
-        snapshotGame:setState(state)
-        self.lastSnapshot = snapshotGame -- DEBUG
+        self._runnerWithoutPrediction:applyState(state)
         -- Fix client-predicted inconsistencies in the past
-        self._clientRunner:applyStateTransform(snapshotGame.frame - self._framesOfLatency, function(game)
-          -- Apply client's inputs to past state
-          game.inputs[self.clientId] = tableUtils.cloneTable(snapshotGame.inputs[self.clientId])
-          -- Apply client-predicted entity states to past state
-          local entityExists = {}
-          for _, entity in ipairs(snapshotGame.entities) do
-            if self:isEntityUsingClientSidePrediction(entity) then
-              local id = snapshotGame:getEntityId(entity)
-              entityExists[id] = true
-              local entity2, index = game:getEntityById(id)
-              -- Replace entity states
-              if entity2 then
-                if game:isSyncEnabledForEntity(entity2) and snapshotGame:isSyncEnabledForEntity(entity) then
-                  game.entities[index] = game:createEntityFromState(snapshotGame:getStateFromEntity(entity))
-                end
-              -- Spawn missing entities
-              else
-                if snapshotGame:isSyncEnabledForEntity(entity) then
-                  table.insert(game.entities, game:createEntityFromState(snapshotGame:getStateFromEntity(entity)))
-                end
-              end
-            end
-          end
-          -- Despawn client-predicted entities that shouldn't exist
-          for i = #game.entities, 1, -1 do
-            local id = game:getEntityId(game.entities[i])
-            if self:isEntityUsingClientSidePrediction(game.entities[i]) and not entityExists[id] and game:isSyncEnabledForEntity(game.entities[i]) then
-              table.remove(game.entities, i)
-            end
-          end
+        self._runnerWithoutSmoothing:applyStateTransform(state.frame - self._framesOfLatency, function(game)
+          self:_syncToTargetGame(self.gameWithoutSmoothing, gameDefinition:new({ initialState = state }), true)
         end)
         -- Fix non-predicted inconsistencies in the present
-        self._clientRunner:applyStateTransform(snapshotGame.frame, function(game)
-          -- Apply non-predicted inputs to past state
-          local clientPredictedInputs = game.inputs[self.clientId]
-          game.inputs = tableUtils.cloneTable(snapshotGame.inputs)
-          game.inputs[self.clientId] = clientPredictedInputs
-          -- Apply non-predicted entity states to past state
-          local entityExists = {}
-          for _, entity in ipairs(snapshotGame.entities) do
-            if not self:isEntityUsingClientSidePrediction(entity) then
-              local id = snapshotGame:getEntityId(entity)
-              entityExists[id] = true
-              local entity2, index = game:getEntityById(id)
-              -- Replace entity states
-              if entity2 then
-                if game:isSyncEnabledForEntity(entity2) then
-                  game.entities[index] = game:createEntityFromState(snapshotGame:getStateFromEntity(entity))
-                end
-              -- Spawn missing entities
-              else
-                if snapshotGame:isSyncEnabledForEntity(entity) then
-                  table.insert(game.entities, game:createEntityFromState(snapshotGame:getStateFromEntity(entity)))
-                end
-              end
-            end
-          end
-          -- Despawn non-predicted entities that shouldn't exist
-          for i = #game.entities, 1, -1 do
-            local id = game:getEntityId(game.entities[i])
-            if not self:isEntityUsingClientSidePrediction(game.entities[i]) and not entityExists[id] and game:isSyncEnabledForEntity(game.entities[i]) then
-              table.remove(game.entities, i)
-            end
-          end
+        self._runnerWithoutSmoothing:applyStateTransform(state.frame, function(game)
+          self:_syncToTargetGame(self.gameWithoutSmoothing, gameDefinition:new({ initialState = state }), false)
         end)
       end
     end,
     _applyEvent = function(self, event)
-      self._serverRunner:applyEvent(event)
-      return self._clientRunner:applyEvent(event)
+      self._runnerWithoutPrediction:applyEvent(event)
+      return self._runnerWithoutSmoothing:applyEvent(event)
     end,
     _unapplyEvent = function(self, event)
-      self._serverRunner:unapplyEvent(event)
-      return self._clientRunner:unapplyEvent(event)
+      self._runnerWithoutPrediction:unapplyEvent(event)
+      return self._runnerWithoutSmoothing:unapplyEvent(event)
     end,
     _ping = function(self)
       -- Send a ping to the server, no need to flush immediately since we want the buffer time to be accounted for
@@ -396,7 +423,7 @@ function GameClient:new(params)
       end
     end,
     _addClientMetadata = function(self, obj)
-      local frame = self._clientRunner:getGame().frame
+      local frame = self.gameWithoutSmoothing.frame
       obj.clientMetadata = {
         clientId = self.clientId,
         frameSent = frame,
@@ -408,7 +435,7 @@ function GameClient:new(params)
     end,
     _recordTimeSyncOffset = function(self, frame)
       if self._hasSyncedTime then
-        self._timeSyncOptimizer:recordOffset(frame - self._clientRunner:getGame().frame - 1)
+        self._timeSyncOptimizer:recordOffset(frame - self.gameWithoutSmoothing.frame - 1)
       end
     end,
     _recordLatencyOffset = function(self, clientMetadata, serverMetadata)
@@ -419,23 +446,6 @@ function GameClient:new(params)
           end
         end
       end
-    end,
-
-    -- Callback methods
-    onConnect = function(self, callback)
-      table.insert(self._connectCallbacks, callback)
-    end,
-    onConnectFailure = function(self, callback)
-      table.insert(self._connectFailureCallbacks, callback)
-    end,
-    onDisconnect = function(self, callback)
-      table.insert(self._disconnectCallbacks, callback)
-    end,
-    onSync = function(self, callback)
-      table.insert(self._syncCallbacks, callback)
-    end,
-    onDesync = function(self, callback)
-      table.insert(self._desyncCallbacks, callback)
     end
   }
 

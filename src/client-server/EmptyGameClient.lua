@@ -4,6 +4,9 @@ function EmptyGameClient:new()
     -- Public vars
     clientId = nil,
     data = {},
+    game = {},
+    gameWithoutSmoothing = {},
+    gameWithoutPrediction = {},
 
     -- Public methods
     connect = function(self, handshake) end,
@@ -12,8 +15,6 @@ function EmptyGameClient:new()
     isConnecting = function(self) end,
     fireEvent = function(self, eventType, eventData, params) end,
     setInputs = function(self, inputs, params) end,
-    getGame = function(self) end,
-    getGameWithoutPrediction = function(self) end,
     update = function(self, dt) end,
     simulateNetworkConditions = function(self, params) end,
     getFramesOfLatency = function(self) end,

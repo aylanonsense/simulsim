@@ -75,26 +75,31 @@ local gameDef = simulsim.defineGame({
           if isOverlapping(entity, entity2) then
             -- Bullets push players back a bit
             if entity2.type == 'tank' and entity.team ~= entity2.team then
-              self:temporarilyDisableEntitySync(entity2)
-              -- self:temporarilyDisableEntitySync(entity)
-              -- entity2.x = entity2.x + 6 * entity.vx * dt
-              -- entity2.y = entity2.y + 6 * entity.vy * dt
-              entity2.x = 50
-              entity2.y = 50
+              self:temporarilyDisableSyncForEntity(entity2)
+              -- self:temporarilyDisableSyncForEntity(entity)
+              -- self:disableSyncForEntity(entity2)
+              -- self:temporarilyDisableSyncForEntity(entity)
+              entity2.x = entity2.x + 6 * entity.vx * dt
+              entity2.y = entity2.y + 6 * entity.vy * dt
+              -- entity2.x = 50
+              -- entity2.y = 50
               self:despawnEntity(entity)
               -- if self.isClient then
                 -- love.audio.play(sounds.bulletHit:clone())
               -- end
             -- Bullets push balls away
             elseif entity2.type == 'ball' then
-              -- self:temporarilyDisableEntitySync(entity2)
-              local dx = entity2.x - entity.x
-              local dy = entity2.y - entity.y
-              local dist = math.sqrt(dx * dx + dy * dy)
-              if dist > 0 then
-                entity2.vx = (entity2.vx + entity.vx + 50 * dx / dist) / 2
-                entity2.vy = (entity2.vy + entity.vy + 50 * dy / dist) / 2
-              end
+              -- self:temporarilyDisableSyncForEntity(entity2)
+              -- if entity.clientId ~= self.clientId then 
+              self:enablePredictionForEntity(entity2, entity.clientId)
+                local dx = entity2.x - entity.x
+                local dy = entity2.y - entity.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist > 0 then
+                  entity2.vx = (entity2.vx + entity.vx + 50 * dx / dist) / 2
+                  entity2.vy = (entity2.vy + entity.vy + 50 * dy / dist) / 2
+                end
+              -- end
               self:despawnEntity(entity)
               -- if self.isClient then
                 -- love.audio.play(sounds.ballHit:clone())
@@ -270,7 +275,7 @@ for clientIndex, client in ipairs(clients) do
       love.graphics.scale(RENDER_SCALE, RENDER_SCALE)
     end
 
-    drawGame(client.getGame(), client.getGameWithoutPrediction(), x, y)
+    drawGame(client.game, client.gameWithoutPrediction, x, y)
     if client._client.lastSnapshot then
       drawGame(client._client.lastSnapshot, nil, x, y + GAME_HEIGHT + 10)
     end

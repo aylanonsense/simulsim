@@ -11,9 +11,9 @@ function GameRunner:new(params)
   return {
     -- Private vars
     _futureStates = {},
-    _transformHistory = {},
     _stateHistory = {},
     _eventHistory = {},
+    _transformHistory = {},
     _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
 
     -- Public vars
@@ -21,9 +21,6 @@ function GameRunner:new(params)
     framesOfHistory = framesOfHistory,
 
     -- Public methods
-    getGame = function(self)
-      return self.game
-    end,
     -- Adds an event to be applied on the given frame, which may trigger a rewind
     applyEvent = function(self, event, params)
       params = params or {}
@@ -96,10 +93,15 @@ function GameRunner:new(params)
     setState = function(self, state)
       -- Set the game's state
       self.game:setState(state)
-      -- Only future events are still valid
+      -- Only future history is still valid
       for i = #self._eventHistory, 1, -1 do
         if self._eventHistory[i].event.frame <= self.game.frame then
           table.remove(self._eventHistory, i)
+        end
+      end
+      for i = #self._transformHistory, 1, -1 do
+        if self._transformHistory[i].frame <= self.game.frame then
+          table.remove(self._transformHistory, i)
         end
       end
       -- The only valid state is the current one
@@ -151,9 +153,9 @@ function GameRunner:new(params)
     reset = function(self)
       self.game:reset()
       self._futureStates = {}
-      self._transformHistory = {}
       self._stateHistory = {}
       self._eventHistory = {}
+      self._transformHistory = {}
     end,
     rewind = function(self, numFrames)
       if self:_rewindToFrame(self.game.frame - numFrames) then
@@ -176,9 +178,9 @@ function GameRunner:new(params)
       })
       -- Set the runner's private vars
       clonedRunner._futureStates = tableUtils.cloneTable(self._futureStates)
-      clonedRunner._transformHistory = tableUtils.cloneTable(self._transformHistory)
       clonedRunner._stateHistory = tableUtils.cloneTable(self._stateHistory)
       clonedRunner._eventHistory = tableUtils.cloneTable(self._eventHistory)
+      clonedRunner._transformHistory = tableUtils.cloneTable(self._transformHistory)
       -- Return the newly-cloned runner
       return clonedRunner
     end,
@@ -255,7 +257,7 @@ function GameRunner:new(params)
       end
       -- Update the game
       self.game:resetEntityIdGeneration('frame-' .. self.game.frame .. '-')
-      self.game:updateMetadata(dt)
+      self.game:updateEntityMetadata(dt)
       self.game:update(dt, self.game.inputs, nonInputEvents, isTopFrame)
       -- Check to see if any scheduled states need to applied now
       for i = #self._futureStates, 1, -1 do
@@ -295,16 +297,16 @@ function GameRunner:new(params)
           table.remove(self._stateHistory, i)
         end
       end
-      -- Remove old transformation history
-      for i = #self._transformHistory, 1, -1 do
-        if self._transformHistory[i].frame < self.game.frame - self.framesOfHistory - self._framesBetweenStateSnapshots then
-          table.remove(self._transformHistory, i)
-        end
-      end
       -- Remove old event history
       for i = #self._eventHistory, 1, -1 do
         if self._eventHistory[i].event.frame < self.game.frame - self.framesOfHistory - self._framesBetweenStateSnapshots then
           table.remove(self._eventHistory, i)
+        end
+      end
+      -- Remove old transformation history
+      for i = #self._transformHistory, 1, -1 do
+        if self._transformHistory[i].frame < self.game.frame - self.framesOfHistory - self._framesBetweenStateSnapshots then
+          table.remove(self._transformHistory, i)
         end
       end
     end,

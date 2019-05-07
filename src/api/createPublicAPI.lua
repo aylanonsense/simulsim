@@ -215,6 +215,9 @@ function createClientAPI(client, isClientSide)
     _client = client,
     clientId = client.clientId,
     data = client.data,
+    game = client.game,
+    gameWithoutSmoothing = client.gameWithoutSmoothing,
+    gameWithoutPrediction = client.gameWithoutPrediction,
 
     -- Overrideable callback functions
     connected = function() end,
@@ -238,12 +241,6 @@ function createClientAPI(client, isClientSide)
     end,
     isSynced = function()
       return client:isSynced()
-    end,
-    getGame = function()
-      return client:getGame()
-    end,
-    getGameWithoutPrediction = function()
-      return client:getGameWithoutPrediction()
     end,
     getFramesOfLatency = function()
       return client:getFramesOfLatency()
