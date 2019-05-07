@@ -7,7 +7,7 @@ function EmptyGameServer:new(params)
     getClientById = function(self, clientId) end,
     getClients = function(self) return {} end,
     fireEvent = function(self, eventType, eventData, params) end,
-    getSimulation = function(self) end,
+    getGame = function(self) end,
     update = function(self, dt) end,
 
     -- Overridable methods

@@ -35,7 +35,7 @@ end
 
 function createInMemoryNetwork(params)
   params = params or {}
-  local simulationDefinition = params.simulationDefinition
+  local gameDefinition = params.gameDefinition
   local numClients = params.numClients or 1
 
   -- Keep track of transport streams
@@ -44,7 +44,7 @@ function createInMemoryNetwork(params)
   -- Create the server
   local listener = LocalConnectionListener:new()
   local server = Server:new({
-    simulationDefinition = simulationDefinition,
+    gameDefinition = gameDefinition,
     listener = listener
   })
 
@@ -74,7 +74,7 @@ function createInMemoryNetwork(params)
       receiveStream = serverToClient
     })
     local client = Client:new({
-      simulationDefinition = simulationDefinition,
+      gameDefinition = gameDefinition,
       conn = clientConn
     })
     table.insert(clients, client)
@@ -117,12 +117,12 @@ end
 
 function createLocalhostShareNetwork(params)
   params = params or {}
-  local simulationDefinition = params.simulationDefinition
+  local gameDefinition = params.gameDefinition
   local port = params.port
 
   -- Create the server
   local server = Server:new({
-    simulationDefinition = simulationDefinition,
+    gameDefinition = gameDefinition,
     listener = ShareConnectionListener:new({
       isLocalhost = true,
       port = port
@@ -131,7 +131,7 @@ function createLocalhostShareNetwork(params)
 
   -- Create the client
   local client = Client:new({
-    simulationDefinition = simulationDefinition,
+    gameDefinition = gameDefinition,
     conn = ShareConnection:new({
       isLocalhost = true,
       port = port
@@ -165,11 +165,11 @@ end
 
 function createServerSideShareNetwork(params)
   params = params or {}
-  local simulationDefinition = params.simulationDefinition
+  local gameDefinition = params.gameDefinition
 
   -- Create the server
   local server = Server:new({
-    simulationDefinition = simulationDefinition,
+    gameDefinition = gameDefinition,
     listener = ShareConnectionListener:new({
       isLocalhost = false
     })
@@ -203,14 +203,14 @@ end
 
 function createClientSideShareNetwork(params)
   params = params or {}
-  local simulationDefinition = params.simulationDefinition
+  local gameDefinition = params.gameDefinition
 
   -- Create a fake server
   local server = EmptyServer:new()
 
   -- Create the client
   local client = Client:new({
-    simulationDefinition = simulationDefinition,
+    gameDefinition = gameDefinition,
     conn = ShareConnection:new({
       isLocalhost = false
     })

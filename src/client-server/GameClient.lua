@@ -1,6 +1,6 @@
 -- Load dependencies
 local MessageClient = require 'src/client-server/MessageClient'
-local SimulationRunner = require 'src/game/GameRunner'
+local GameRunner = require 'src/game/GameRunner'
 local OffsetOptimizer = require 'src/transport/OffsetOptimizer'
 local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
@@ -9,17 +9,17 @@ local GameClient = {}
 function GameClient:new(params)
   params = params or {}
   local conn = params.conn
-  local simulationDefinition = params.simulationDefinition
+  local gameDefinition = params.gameDefinition
   local framesBetweenFlushes = params.framesBetweenFlushes or 3
   local framesBetweenPings = params.framesBetweenPings or 15
   local maxFramesOfLatency = params.maxFramesOfLatency or 180
 
-  -- Create a simulation for the client and a runner for it
-  local clientRunner = SimulationRunner:new({
-    simulation = simulationDefinition:new()
+  -- Create a game for the client and a runner for it
+  local clientRunner = GameRunner:new({
+    game = gameDefinition:new()
   })
-  local serverRunner = SimulationRunner:new({
-    simulation = simulationDefinition:new()
+  local serverRunner = GameRunner:new({
+    game = gameDefinition:new()
   })
 
   -- Create offset optimizers to minimize time desync and latency
@@ -87,7 +87,7 @@ function GameClient:new(params)
         -- Create a new event
         local event = self:_addClientMetadata({
           id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
-          frame = self._clientRunner:getSimulation().frame + self._framesOfLatency + 1,
+          frame = self._clientRunner:getGame().frame + self._framesOfLatency + 1,
           type = eventType,
           data = eventData,
           isInputEvent = isInputEvent
@@ -99,7 +99,7 @@ function GameClient:new(params)
             framesUntilAutoUnapply = self._framesOfLatency + 5
           })
           local clientEvent = tableUtils.cloneTable(event)
-          clientEvent.frame = self._clientRunner:getSimulation().frame + 1
+          clientEvent.frame = self._clientRunner:getGame().frame + 1
           self._clientRunner:applyEvent(clientEvent, {
             framesUntilAutoUnapply = self._framesOfLatency + 5,
             preserveFrame = true
@@ -125,11 +125,11 @@ function GameClient:new(params)
         }, params)
       end
     end,
-    getSimulation = function(self)
-      return self._clientRunner:getSimulation()
+    getGame = function(self)
+      return self._clientRunner:getGame()
     end,
-    getSimulationWithoutPrediction = function(self)
-      return self._serverRunner:getSimulation()
+    getGameWithoutPrediction = function(self)
+      return self._serverRunner:getGame()
     end,
     update = function(self, dt)
       -- Update the underlying messaging client
@@ -137,14 +137,14 @@ function GameClient:new(params)
     end,
     moveForwardOneFrame = function(self, dt)
       local wasSynced = self._hasSyncedTime and self._hasSyncedLatency
-      -- Update the simulation (via the simulation runner)
+      -- Update the game (via the game runner)
       self._clientRunner:moveForwardOneFrame(dt)
       self._serverRunner:moveForwardOneFrame(dt)
       if self._messageClient:isConnected() then
         -- Update the timing and latency optimizers
         self._timeSyncOptimizer:moveForwardOneFrame(dt)
         self._latencyOptimizer:moveForwardOneFrame(dt)
-        -- Rewind or fast forward the simulation to get it synced with the server
+        -- Rewind or fast forward the game to get it synced with the server
         local timeAdjustment = self._timeSyncOptimizer:getRecommendedAdjustment()
         if self._hasSyncedTime and timeAdjustment then
           if timeAdjustment > 90 or timeAdjustment < -90 then
@@ -242,7 +242,7 @@ function GameClient:new(params)
       self._framesUntilNextFlush = 0
       self._timeSyncOptimizer:reset()
       self._latencyOptimizer:reset()
-      -- Set the state of the client-side simulation
+      -- Set the state of the client-side game
       self._clientRunner:reset()
       self._clientRunner:setState(state)
       self._serverRunner:reset()
@@ -307,73 +307,73 @@ function GameClient:new(params)
         self:_recordTimeSyncOffset(state.frame)
         -- state represents what the game would currently look like with no client-side prediction
         self._serverRunner:applyState(state)
-        -- Create a new simulation from the snapshot
-        local snapshotSimulation = simulationDefinition:new()
-        snapshotSimulation:setState(state)
-        self.lastSnapshot = snapshotSimulation -- DEBUG
+        -- Create a new game from the snapshot
+        local snapshotGame = gameDefinition:new()
+        snapshotGame:setState(state)
+        self.lastSnapshot = snapshotGame -- DEBUG
         -- Fix client-predicted inconsistencies in the past
-        self._clientRunner:applyStateTransform(snapshotSimulation.frame - self._framesOfLatency, function(simulation)
+        self._clientRunner:applyStateTransform(snapshotGame.frame - self._framesOfLatency, function(game)
           -- Apply client's inputs to past state
-          simulation.inputs[self.clientId] = tableUtils.cloneTable(snapshotSimulation.inputs[self.clientId])
+          game.inputs[self.clientId] = tableUtils.cloneTable(snapshotGame.inputs[self.clientId])
           -- Apply client-predicted entity states to past state
           local entityExists = {}
-          for _, entity in ipairs(snapshotSimulation.entities) do
+          for _, entity in ipairs(snapshotGame.entities) do
             if self:isEntityUsingClientSidePrediction(entity) then
-              local id = snapshotSimulation:getEntityId(entity)
+              local id = snapshotGame:getEntityId(entity)
               entityExists[id] = true
-              local entity2, index = simulation:getEntityById(id)
+              local entity2, index = game:getEntityById(id)
               -- Replace entity states
               if entity2 then
-                if simulation:isSyncEnabledForEntity(entity2) and snapshotSimulation:isSyncEnabledForEntity(entity) then
-                  simulation.entities[index] = simulation:createEntityFromState(snapshotSimulation:getStateFromEntity(entity))
+                if game:isSyncEnabledForEntity(entity2) and snapshotGame:isSyncEnabledForEntity(entity) then
+                  game.entities[index] = game:createEntityFromState(snapshotGame:getStateFromEntity(entity))
                 end
               -- Spawn missing entities
               else
-                if snapshotSimulation:isSyncEnabledForEntity(entity) then
-                  table.insert(simulation.entities, simulation:createEntityFromState(snapshotSimulation:getStateFromEntity(entity)))
+                if snapshotGame:isSyncEnabledForEntity(entity) then
+                  table.insert(game.entities, game:createEntityFromState(snapshotGame:getStateFromEntity(entity)))
                 end
               end
             end
           end
           -- Despawn client-predicted entities that shouldn't exist
-          for i = #simulation.entities, 1, -1 do
-            local id = simulation:getEntityId(simulation.entities[i])
-            if self:isEntityUsingClientSidePrediction(simulation.entities[i]) and not entityExists[id] and simulation:isSyncEnabledForEntity(simulation.entities[i]) then
-              table.remove(simulation.entities, i)
+          for i = #game.entities, 1, -1 do
+            local id = game:getEntityId(game.entities[i])
+            if self:isEntityUsingClientSidePrediction(game.entities[i]) and not entityExists[id] and game:isSyncEnabledForEntity(game.entities[i]) then
+              table.remove(game.entities, i)
             end
           end
         end)
         -- Fix non-predicted inconsistencies in the present
-        self._clientRunner:applyStateTransform(snapshotSimulation.frame, function(simulation)
+        self._clientRunner:applyStateTransform(snapshotGame.frame, function(game)
           -- Apply non-predicted inputs to past state
-          local clientPredictedInputs = simulation.inputs[self.clientId]
-          simulation.inputs = tableUtils.cloneTable(snapshotSimulation.inputs)
-          simulation.inputs[self.clientId] = clientPredictedInputs
+          local clientPredictedInputs = game.inputs[self.clientId]
+          game.inputs = tableUtils.cloneTable(snapshotGame.inputs)
+          game.inputs[self.clientId] = clientPredictedInputs
           -- Apply non-predicted entity states to past state
           local entityExists = {}
-          for _, entity in ipairs(snapshotSimulation.entities) do
+          for _, entity in ipairs(snapshotGame.entities) do
             if not self:isEntityUsingClientSidePrediction(entity) then
-              local id = snapshotSimulation:getEntityId(entity)
+              local id = snapshotGame:getEntityId(entity)
               entityExists[id] = true
-              local entity2, index = simulation:getEntityById(id)
+              local entity2, index = game:getEntityById(id)
               -- Replace entity states
               if entity2 then
-                if simulation:isSyncEnabledForEntity(entity2) then
-                  simulation.entities[index] = simulation:createEntityFromState(snapshotSimulation:getStateFromEntity(entity))
+                if game:isSyncEnabledForEntity(entity2) then
+                  game.entities[index] = game:createEntityFromState(snapshotGame:getStateFromEntity(entity))
                 end
               -- Spawn missing entities
               else
-                if snapshotSimulation:isSyncEnabledForEntity(entity) then
-                  table.insert(simulation.entities, simulation:createEntityFromState(snapshotSimulation:getStateFromEntity(entity)))
+                if snapshotGame:isSyncEnabledForEntity(entity) then
+                  table.insert(game.entities, game:createEntityFromState(snapshotGame:getStateFromEntity(entity)))
                 end
               end
             end
           end
           -- Despawn non-predicted entities that shouldn't exist
-          for i = #simulation.entities, 1, -1 do
-            local id = simulation:getEntityId(simulation.entities[i])
-            if not self:isEntityUsingClientSidePrediction(simulation.entities[i]) and not entityExists[id] and simulation:isSyncEnabledForEntity(simulation.entities[i]) then
-              table.remove(simulation.entities, i)
+          for i = #game.entities, 1, -1 do
+            local id = game:getEntityId(game.entities[i])
+            if not self:isEntityUsingClientSidePrediction(game.entities[i]) and not entityExists[id] and game:isSyncEnabledForEntity(game.entities[i]) then
+              table.remove(game.entities, i)
             end
           end
         end)
@@ -396,7 +396,7 @@ function GameClient:new(params)
       end
     end,
     _addClientMetadata = function(self, obj)
-      local frame = self._clientRunner:getSimulation().frame
+      local frame = self._clientRunner:getGame().frame
       obj.clientMetadata = {
         clientId = self.clientId,
         frameSent = frame,
@@ -408,7 +408,7 @@ function GameClient:new(params)
     end,
     _recordTimeSyncOffset = function(self, frame)
       if self._hasSyncedTime then
-        self._timeSyncOptimizer:recordOffset(frame - self._clientRunner:getSimulation().frame - 1)
+        self._timeSyncOptimizer:recordOffset(frame - self._clientRunner:getGame().frame - 1)
       end
     end,
     _recordLatencyOffset = function(self, clientMetadata, serverMetadata)

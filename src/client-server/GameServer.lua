@@ -1,6 +1,6 @@
 -- Load dependencies
 local MessageServer = require 'src/client-server/MessageServer'
-local SimulationRunner = require 'src/game/GameRunner'
+local GameRunner = require 'src/game/GameRunner'
 local stringUtils = require 'src/utils/string'
 
 local ServerSideGameClient = {}
@@ -38,7 +38,7 @@ function ServerSideGameClient:new(params)
     end,
     update = function(dt) end,
     moveForwardOneFrame = function(self, dt)
-      -- Send a snapshot of the simulation state every so often
+      -- Send a snapshot of the game state every so often
       if self._framesBetweenSnapshots > 0 then
         self._framesUntilNextSnapshot = self._framesUntilNextSnapshot - 1
         if self._framesUntilNextSnapshot <= 0 then
@@ -97,14 +97,14 @@ local GameServer = {}
 function GameServer:new(params)
   params = params or {}
   local listener = params.listener
-  local simulationDefinition = params.simulationDefinition
+  local gameDefinition = params.gameDefinition
   local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
 
-  -- Create the simulation
-  local simulation = simulationDefinition:new()
-  local runner = SimulationRunner:new({
-    simulation = simulation,
+  -- Create the game
+  local game = gameDefinition:new()
+  local runner = GameRunner:new({
+    game = game,
     framesOfHistory = maxClientEventFramesLate + 1
   })
 
@@ -118,11 +118,13 @@ function GameServer:new(params)
     _messageServer = messageServer,
     _nextClientId = 1,
     _clients = {},
-    _simulation = simulation,
     _runner = runner,
     _maxClientEventFramesLate = maxClientEventFramesLate,
     _maxClientEventFramesEarly = maxClientEventFramesEarly,
     _connectCallbacks = {},
+
+    -- Public vars
+    game = game,
 
     -- Public methods
     -- Starts the server listening for new client connections
@@ -145,12 +147,12 @@ function GameServer:new(params)
     getClients = function(self)
       return self._clients
     end,
-    -- Fires an event for the simulation and lets all clients know
+    -- Fires an event for the game and lets all clients know
     fireEvent = function(self, eventType, eventData, params)
       -- Create an event
       local event = {
         id = 'server-' .. stringUtils.generateRandomString(10),
-        frame = self._simulation.frame + 1,
+        frame = self.game.frame + 1,
         type = eventType,
         data = eventData
       }
@@ -159,8 +161,8 @@ function GameServer:new(params)
       -- Return the event
       return event
     end,
-    getSimulation = function(self)
-      return self._simulation
+    getGame = function(self)
+      return self.game
     end,
     update = function(self, dt)
       -- Update the underlying messaging server
@@ -171,7 +173,7 @@ function GameServer:new(params)
       end
     end,
     moveForwardOneFrame = function(self, dt)
-      -- Update the simulation via the simulation runner
+      -- Update the game via the game runner
       self._runner:moveForwardOneFrame(dt)
       -- Update all clients
       for _, client in ipairs(self._clients) do
@@ -193,8 +195,8 @@ function GameServer:new(params)
       return true
     end,
     generateStateSnapshotForClient = function(self, client)
-      return self._simulation:getState()
-    end
+      return self.game:getState()
+    end,
 
     -- Callback methods
     onConnect = function(self, callback)
@@ -211,7 +213,7 @@ function GameServer:new(params)
     end,
     _addServerMetadata = function(self, obj)
       obj.serverMetadata = {
-        frameReceived = self._simulation.frame
+        frameReceived = self.game.frame
       }
       return obj
     end,
@@ -256,7 +258,7 @@ function GameServer:new(params)
           -- TODO reject if too far in the past
           -- TODO update frame if in the past and adjusting is allowed
           local eventApplied = false
-          if self._simulation.frame - self._maxClientEventFramesLate < event.frame and event.frame <= self._simulation.frame + 1 + self._maxClientEventFramesEarly and self:shouldAcceptEventFromClient(client, event) then
+          if self.game.frame - self._maxClientEventFramesLate < event.frame and event.frame <= self.game.frame + 1 + self._maxClientEventFramesEarly and self:shouldAcceptEventFromClient(client, event) then
             -- Apply the event server-side and let all clients know about it
             eventApplied = self:_applyEvent(event)
           end
@@ -266,7 +268,7 @@ function GameServer:new(params)
           end
         elseif messageType == 'ping' then
           local pingResponse = self:_addServerMetadata(messageContent)
-          pingResponse.frame = self._simulation.frame
+          pingResponse.frame = self.game.frame
           client:_sendPingResponse(pingResponse)
         end
       end

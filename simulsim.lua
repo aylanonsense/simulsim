@@ -1,18 +1,16 @@
-local Simulation = require 'src/game/Game'
-local createNetwork = require 'src/network/createNetwork'
+local Game = require 'src/game/Game'
+local createGameNetwork = require 'src/network/createGameNetwork'
 local createPublicAPI = require 'src/api/createPublicAPI'
 
 function defineGame(params)
-  return Simulation:define(params)
+  return Game:define(params)
 end
 
-function createGameNetwork(params)
-  params = params or {}
-  params.simulationDefinition = params.gameDefinition
-  return createPublicAPI(createNetwork(params))
+function createGameNetwork2(params)
+  return createPublicAPI(createGameNetwork(params))
 end
 
 return {
   defineGame = defineGame,
-  createGameNetwork = createGameNetwork
+  createGameNetwork = createGameNetwork2
 }

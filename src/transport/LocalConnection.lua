@@ -66,42 +66,36 @@ function LocalConnection:new(params)
     end,
 
     -- Private methods
-    _handleReceivePacket = function(self, packetType, packetContent)
+    _handlePacket = function(self, packetType, packetContent)
       -- Server accepts connection requests
       if packetType == 'connect-request' and not self._isClient then
-        self:_handleConnect()
+        self._isConnected = true
+        for _, callback in ipairs(self._connectCallbacks) do
+          callback()
+        end
         self._sendStream:send({ 'connect-accept' }, true)
       -- Client connects to the server
       elseif packetType == 'connect-accept' and self._isClient then
-        self:_handleConnect()
+        self._isConnected = true
+        for _, callback in ipairs(self._connectCallbacks) do
+          callback()
+        end
       elseif packetType == 'disconnected' then
-        self:_handleDisconnect()
+        self._isConnected = false
+        for _, callback in ipairs(self._disconnectCallbacks) do
+          callback()
+        end
       elseif packetType == 'message' then
-        self:_handleReceiveMessage(packetContent)
-      end
-    end,
-    _handleConnect = function(self)
-      self._isConnected = true
-      for _, callback in ipairs(self._connectCallbacks) do
-        callback()
-      end
-    end,
-    _handleDisconnect = function(self)
-      self._isConnected = false
-      for _, callback in ipairs(self._disconnectCallbacks) do
-        callback()
-      end
-    end,
-    _handleReceiveMessage = function(self, msg)
-      for _, callback in ipairs(self._receiveCallbacks) do
-        callback(msg)
+        for _, callback in ipairs(self._receiveCallbacks) do
+          callback(packetContent)
+        end
       end
     end
   }
 
   -- Bind events
   conn._receiveStream:onReceive(function(packet)
-    conn:_handleReceivePacket(packet[1], packet[2])
+    conn:_handlePacket(packet[1], packet[2])
   end)
 
   -- Return the new connection

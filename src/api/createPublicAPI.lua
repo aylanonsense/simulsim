@@ -136,7 +136,7 @@ function createServerAPI(server, isServerSide)
       return true
     end,
     generateStateSnapshotForClient = function(client)
-      return server:getSimulation():getState()
+      return server:getGame():getState()
     end,
 
     -- Functions to call
@@ -154,7 +154,7 @@ function createServerAPI(server, isServerSide)
       end
     end,
     getGame = function()
-      return server:getSimulation()
+      return server:getGame()
     end,
     fireEvent = function(eventType, eventData, params)
       return server:fireEvent(eventType, eventData, params)
@@ -240,10 +240,10 @@ function createClientAPI(client, isClientSide)
       return client:isSynced()
     end,
     getGame = function()
-      return client:getSimulation()
+      return client:getGame()
     end,
     getGameWithoutPrediction = function()
-      return client:getSimulationWithoutPrediction()
+      return client:getGameWithoutPrediction()
     end,
     getFramesOfLatency = function()
       return client:getFramesOfLatency()
@@ -281,14 +281,6 @@ function createClientAPI(client, isClientSide)
   client:onDesync(function()
     api.desynced()
   end)
-
-  -- Override client methods
-  -- client.syncSimulationData = function(self, presentData, futureData)
-  --   return api.syncGameData(presentData, futureData)
-  -- end
-  -- client.syncEntityState = function(self, entity, presentState, futureState)
-  --   return api.syncEntityState(entity, presentState, futureState)
-  -- end
 
   return api
 end

@@ -5,7 +5,7 @@ function noop() end
 
 local Game = {}
 function Game:new()
-  local simulation = {
+  local game = {
     -- Private vars
     _entityIdPrefix = '',
     _nextEntityId = 1,
@@ -17,7 +17,7 @@ function Game:new()
     entities = {},
 
     -- Public methods
-    -- Gets the current state of the simulation as a simple table
+    -- Gets the current state of the game as a simple table
     getState = function(self)
       local state = {
         frame = self.frame,
@@ -30,7 +30,7 @@ function Game:new()
       end
       return state
     end,
-    -- Sets the current state of the simulation
+    -- Sets the current state of the game
     setState = function(self, state)
       self.frame = state.frame or self.frame
       if state.inputs then
@@ -46,20 +46,20 @@ function Game:new()
         end
       end
     end,
-    -- Creates another simulation identical to this one
+    -- Creates another game identical to this one
     clone = function(self)
-      -- Create a new simulation
-      local clonedSimulation = Game:new()
+      -- Create a new game
+      local clonedGame = Game:new()
       -- Copy all overrideable methods
-      clonedSimulation.update = self.update
-      clonedSimulation.handleEvent = self.handleEvent
-      -- Set the new simuation's state
-      clonedSimulation:setState(self:getState())
-      -- Set the simulation's private vars
-      clonedSimulation._entityIdPrefix = self._entityIdPrefix
-      clonedSimulation._nextEntityId = self._nextEntityId
-      -- Return the newly-cloned simulation
-      return clonedSimulation
+      clonedGame.update = self.update
+      clonedGame.handleEvent = self.handleEvent
+      -- Set the new game's state
+      clonedGame:setState(self:getState())
+      -- Set the game's private vars
+      clonedGame._entityIdPrefix = self._entityIdPrefix
+      clonedGame._nextEntityId = self._nextEntityId
+      -- Return the newly-cloned game
+      return clonedGame
     end,
     -- Gets an entity with the given id
     getEntityById = function(self, entityId)
@@ -78,7 +78,7 @@ function Game:new()
       if shouldGenerateId then
         self:setEntityId(entity, self:generateEntityId())
       end
-      -- Add the entity to the simulation
+      -- Add the entity to the game
       table.insert(self.entities, entity)
       return entity
     end,
@@ -162,8 +162,8 @@ function Game:new()
     handleEvent = function(self, eventType, eventData) end
   }
 
-  -- Return the new simulation
-  return simulation
+  -- Return the new game
+  return game
 end
 function Game:define(params)
   params = params or {}
@@ -172,13 +172,13 @@ function Game:define(params)
 
   return {
     new = function(self)
-      -- Create a new simulation
-      local simulation = Game:new()
+      -- Create a new game
+      local game = Game:new()
       -- Override the overridable methods
-      simulation.update = update
-      simulation.handleEvent = handleEvent
-      -- Return the new simulation
-      return simulation
+      game.update = update
+      game.handleEvent = handleEvent
+      -- Return the new game
+      return game
     end
   }
 end
