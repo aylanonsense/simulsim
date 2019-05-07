@@ -184,34 +184,6 @@ function Game:new(params)
     createEntityFromState = function(self, state)
       return tableUtils.cloneTable(state)
     end,
-    isEntityUsingPrediction = function(self, entity, clientId)
-      if entity._metadata and entity._metadata.prediction then
-        if entity._metadata.prediction[clientId] == true then
-          return true
-        elseif entity._metadata.prediction[clientId] == false then
-          return false
-        end
-      end
-      return entity.clientId == clientId
-    end,
-    enablePredictionForEntity = function(self, entity, clientId)
-      if not entity._metadata then
-        entity._metadata = {}
-      end
-      if not entity._metadata.prediction then
-        entity._metadata.prediction = {}
-      end
-      entity._metadata.prediction[clientId] = true
-    end,
-    disablePredictionForEntity = function(self, entity, clientId)
-      if not entity._metadata then
-        entity._metadata = {}
-      end
-      if not entity._metadata.prediction then
-        entity._metadata.prediction = {}
-      end
-      entity._metadata.prediction[clientId] = false
-    end,
     isSyncEnabledForEntity = function(self, entity)
       if entity._metadata then
         if entity._metadata.sync == false then

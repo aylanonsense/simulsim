@@ -215,9 +215,9 @@ function GameClient:new(params)
     syncEntity = function(self, game, entity, candidateEntity, isPrediction)
       local isEntityUsingPrediction
       if entity then
-        isEntityUsingPrediction = game:isEntityUsingPrediction(entity, self.clientId)
+        isEntityUsingPrediction = self:isEntityUsingPrediction(entity, self.clientId)
       else
-        isEntityUsingPrediction = game:isEntityUsingPrediction(candidateEntity, self.clientId)
+        isEntityUsingPrediction = self:isEntityUsingPrediction(candidateEntity, self.clientId)
       end
       if isEntityUsingPrediction == isPrediction then
         return candidateEntity
@@ -246,6 +246,9 @@ function GameClient:new(params)
     end,
     smoothData = function(self, data, idealData)
       return idealData
+    end,
+    isEntityUsingPrediction = function(self, entity)
+      return entity and entity.clientId == self.clientId
     end,
 
     -- Callback methods

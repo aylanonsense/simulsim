@@ -91,7 +91,7 @@ local gameDef = simulsim.defineGame({
             elseif entity2.type == 'ball' then
               -- self:temporarilyDisableSyncForEntity(entity2)
               -- if entity.clientId ~= self.clientId then 
-              self:enablePredictionForEntity(entity2, entity.clientId)
+              entity2.clientId = entity.clientId
                 local dx = entity2.x - entity.x
                 local dy = entity2.y - entity.y
                 local dist = math.sqrt(dx * dx + dy * dy)
