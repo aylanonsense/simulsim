@@ -72,13 +72,18 @@ function Game:new(params)
         end
       end
     end,
-    getEntityWhere = function(self, search)
+    getEntityWhere = function(self, criteria)
       for index, entity in ipairs(self.entities) do
-        local isMatch = true
-        for k, v in pairs(search) do
-          if entity[k] ~= v then
-            isMatch = false
-            break
+        local isMatch
+        if type(criteria) == 'function' then
+          isMatch = criteria(entity)
+        else
+          isMatch = true
+          for k, v in pairs(search) do
+            if entity[k] ~= v then
+              isMatch = false
+              break
+            end
           end
         end
         if isMatch then
@@ -86,14 +91,22 @@ function Game:new(params)
         end
       end
     end,
-    getEntitiesWhere = function(self, search)
+    getEntities = function(self)
+      return self.entities
+    end,
+    getEntitiesWhere = function(self, criteria)
       local matchingEntities = {}
       for index, entity in ipairs(self.entities) do
-        local isMatch = true
-        for k, v in pairs(search) do
-          if entity[k] ~= v then
-            isMatch = false
-            break
+        local isMatch
+        if type(criteria) == 'function' then
+          isMatch = criteria(entity)
+        else
+          isMatch = true
+          for k, v in pairs(criteria) do
+            if entity[k] ~= v then
+              isMatch = false
+              break
+            end
           end
         end
         if isMatch then
@@ -107,13 +120,18 @@ function Game:new(params)
         callback(entity)
       end
     end,
-    forEachEntityWhere = function(self, search, callback)
+    forEachEntityWhere = function(self, criteria, callback)
       for index, entity in ipairs(self.entities) do
-        local isMatch = true
-        for k, v in pairs(search) do
-          if entity[k] ~= v then
-            isMatch = false
-            break
+        local isMatch
+        if type(criteria) == 'function' then
+          isMatch = criteria(entity)
+        else
+          isMatch = true
+          for k, v in pairs(criteria) do
+            if entity[k] ~= v then
+              isMatch = false
+              break
+            end
           end
         end
         if isMatch then
