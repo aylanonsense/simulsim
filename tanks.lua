@@ -79,10 +79,10 @@ local gameDef = simulsim.defineGame({
               -- self:temporarilyDisableSyncForEntity(entity)
               -- self:disableSyncForEntity(entity2)
               -- self:temporarilyDisableSyncForEntity(entity)
-              entity2.x = entity2.x + 6 * entity.vx * dt
-              entity2.y = entity2.y + 6 * entity.vy * dt
-              -- entity2.x = 50
-              -- entity2.y = 50
+              -- entity2.x = entity2.x + 6 * entity.vx * dt
+              -- entity2.y = entity2.y + 6 * entity.vy * dt
+              entity2.x = 50
+              entity2.y = 50
               self:despawnEntity(entity)
               -- if self.isClient then
                 -- love.audio.play(sounds.bulletHit:clone())
@@ -201,6 +201,19 @@ function server.clientconnected(client)
 end
 
 for clientIndex, client in ipairs(clients) do
+  -- function client.smoothEntity(self, game, entity, idealEntity)
+  --   return entity
+  -- end
+
+  -- function client.smoothEntity(game, entity, idealEntity)
+  --   if idealEntity and entity and (entity.type == 'tank' or entity.type == 'ball') then
+  --     local dx, dy = idealEntity.x - entity.x, idealEntity.y - entity.y
+  --     idealEntity.x = entity.x + dx / 10
+  --     idealEntity.y = entity.y + dy / 10
+  --   end
+  --   return idealEntity
+  -- end
+
   function client.load()
     client.simulateNetworkConditions({
       latency = 500,
@@ -276,9 +289,9 @@ for clientIndex, client in ipairs(clients) do
     end
 
     drawGame(client.game, client.gameWithoutPrediction, x, y)
-    if client._client.lastSnapshot then
-      drawGame(client._client.lastSnapshot, nil, x, y + GAME_HEIGHT + 10)
-    end
+    -- if client._client.lastSnapshot then
+    --   drawGame(client._client.lastSnapshot, nil, x, y + GAME_HEIGHT + 10)
+    -- end
 
     -- Draw network stats
     love.graphics.setColor(0, 0, 0)

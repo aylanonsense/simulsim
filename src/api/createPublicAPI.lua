@@ -279,6 +279,18 @@ function createClientAPI(client, isClientSide)
     api.desynced()
   end)
 
+  -- Override client methods
+  local overrideableMethods = { 'syncEntity', 'syncInputs', 'syncData', 'smoothEntity', 'smoothInputs', 'smoothData', 'isEntityUsingPrediction' }
+  for _, methodName in ipairs(overrideableMethods) do
+    local currMethod = client[methodName]
+    api[methodName] = function(...)
+      return currMethod(client, ...)
+    end
+    client[methodName] = function(self, ...)
+      return api[methodName](...)
+    end
+  end
+
   return api
 end
 

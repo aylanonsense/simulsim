@@ -15,6 +15,10 @@ function GameClient:new(params)
   local maxFramesOfLatency = params.maxFramesOfLatency or 180
 
   -- Create a game for the client and a runner for it
+  local runner = GameRunner:new({
+    game = gameDefinition:new(),
+    allowTimeManipulation = false
+  })
   local runnerWithoutSmoothing = GameRunner:new({ game = gameDefinition:new() })
   local runnerWithoutPrediction = GameRunner:new({ game = gameDefinition:new() })
 
@@ -33,6 +37,7 @@ function GameClient:new(params)
 
   local client = {
     -- Private vars
+    _runner = runner,
     _runnerWithoutSmoothing = runnerWithoutSmoothing,
     _runnerWithoutPrediction = runnerWithoutPrediction,
     _hasSyncedTime = false,
@@ -56,7 +61,7 @@ function GameClient:new(params)
     -- Public vars
     clientId = nil,
     data = {},
-    game = runnerWithoutSmoothing.game, -- TODO actually have a smoothed runner + game
+    game = runner.game,
     gameWithoutSmoothing = runnerWithoutSmoothing.game,
     gameWithoutPrediction = runnerWithoutPrediction.game,
 
@@ -104,6 +109,9 @@ function GameClient:new(params)
             framesUntilAutoUnapply = self._framesOfLatency + 5,
             preserveFrame = true
           })
+          self._runner:applyEvent(clientEvent, {
+            preserveFrame = true
+          })
         end
         -- Send the event to the server
         self._messageClient:buffer({ 'event', event })
@@ -132,6 +140,7 @@ function GameClient:new(params)
     moveForwardOneFrame = function(self, dt)
       local wasSynced = self._hasSyncedTime and self._hasSyncedLatency
       -- Update the game (via the game runner)
+      self._runner:moveForwardOneFrame(dt)
       self._runnerWithoutSmoothing:moveForwardOneFrame(dt)
       self._runnerWithoutPrediction:moveForwardOneFrame(dt)
       if self._messageClient:isConnected() then
@@ -206,6 +215,8 @@ function GameClient:new(params)
         self._runnerWithoutSmoothing.framesOfHistory = math.min(self._framesOfLatency + 10, 300)
       end
       self._runnerWithoutPrediction.framesOfHistory = self._runnerWithoutSmoothing.framesOfHistory
+      -- Smooth game
+      self:_smoothGame()
     end,
     simulateNetworkConditions = function(self, params)
       self._messageClient:simulateNetworkConditions(params)
@@ -241,10 +252,13 @@ function GameClient:new(params)
         return candidateData
       end
     end,
-    smoothEntity = function(self, entity, idealEntity)
+    smoothEntity = function(self, game, entity, idealEntity)
       return idealEntity
     end,
-    smoothData = function(self, data, idealData)
+    smoothInputs = function(self, game, inputs, idealInputs)
+      return idealInputs
+    end,
+    smoothData = function(self, game, data, idealData)
       return idealData
     end,
     isEntityUsingPrediction = function(self, entity)
@@ -362,7 +376,7 @@ function GameClient:new(params)
           local syncedEntity = self:syncEntity(sourceGame, sourceEntity, targetEntity, isPrediction)
           -- Entity was removed
           if not syncedEntity and sourceEntity then
-            -- table.remove(sourceGame.entities, index)
+            table.remove(sourceGame.entities, index)
           -- Entity was added
           elseif syncedEntity and not sourceEntity then
             table.insert(sourceGame.entities, syncedEntity)
@@ -380,7 +394,7 @@ function GameClient:new(params)
           local syncedEntity = self:syncEntity(sourceGame, sourceEntity, nil, isPrediction)
           -- Entity was removed
           if not syncedEntity then
-            -- table.remove(sourceGame.entities, index)
+            table.remove(sourceGame.entities, index)
           -- Entity was modified or swapped out
           else
             sourceGame.entities[index] = syncedEntity
@@ -409,11 +423,60 @@ function GameClient:new(params)
         end)
       end
     end,
+    _smoothGame = function(self)
+      local sourceGame = self.game
+      local targetGame = self.gameWithoutSmoothing:clone()
+      -- Just copy the current frame
+      sourceGame.frame = targetGame.frame
+      -- Smooth entities
+      local entityExistsInTargetGame = {}
+      for _, targetEntity in ipairs(targetGame.entities) do
+        local id = targetGame:getEntityId(targetEntity)
+        entityExistsInTargetGame[id] = true
+        local sourceEntity, index = sourceGame:getEntityById(id)
+        local smoothedEntity = self:smoothEntity(sourceGame, sourceEntity, targetEntity)
+        -- Entity was removed
+        if not smoothedEntity and sourceEntity then
+          table.remove(sourceGame.entities, index)
+        -- Entity was added
+        elseif smoothedEntity and not sourceEntity then
+          table.insert(sourceGame.entities, smoothedEntity)
+        -- Entity was modified or swapped out
+        elseif smoothedEntity and sourceEntity then
+          sourceGame.entities[index] = smoothedEntity
+        end
+      end
+      -- Sync entities that don't exist in the target game
+      for index = #sourceGame.entities, 1, -1 do
+        local sourceEntity = sourceGame.entities[index]
+        local id = sourceGame:getEntityId(sourceEntity)
+        if not entityExistsInTargetGame[id] then
+          local smoothedEntity = self:smoothEntity(sourceGame, sourceEntity, nil)
+          -- Entity was removed
+          if not smoothedEntity then
+            table.remove(sourceGame.entities, index)
+          -- Entity was modified or swapped out
+          else
+            sourceGame.entities[index] = smoothedEntity
+          end
+        end
+      end
+      -- Smooth inputs
+      sourceGame.inputs = self:smoothInputs(sourceGame, sourceGame.inputs, targetGame.inputs)
+      -- Smooth data
+      sourceGame.data = self:smoothData(sourceGame, sourceGame.data, targetGame.data)
+    end,
     _applyEvent = function(self, event)
+      if event.frame > self._runner.game.frame then
+        self._runner:applyEvent(event)
+      end
       self._runnerWithoutPrediction:applyEvent(event)
       return self._runnerWithoutSmoothing:applyEvent(event)
     end,
     _unapplyEvent = function(self, event)
+      if event.frame > self._runner.game.frame then
+        self._runner:unapplyEvent(event)
+      end
       self._runnerWithoutPrediction:unapplyEvent(event)
       return self._runnerWithoutSmoothing:unapplyEvent(event)
     end,

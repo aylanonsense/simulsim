@@ -5,6 +5,7 @@ local GameRunner = {}
 function GameRunner:new(params)
   params = params or {}
   local game = params.game
+  local allowTimeManipulation = params.allowTimeManipulation ~= false
   local framesOfHistory = params.framesOfHistory or 30
   local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 5
 
@@ -14,6 +15,7 @@ function GameRunner:new(params)
     _stateHistory = {},
     _eventHistory = {},
     _transformHistory = {},
+    _allowTimeManipulation = allowTimeManipulation,
     _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
 
     -- Public vars
@@ -115,8 +117,7 @@ function GameRunner:new(params)
         local currFrame = self.game.frame
         if self:_rewindToFrame(state.frame) then
           self:setState(state)
-          self:_fastForwardToFrame(currFrame, true)
-          return true
+          return self:_fastForwardToFrame(currFrame, true)
         else
           return false
         end
@@ -135,8 +136,7 @@ function GameRunner:new(params)
           transformFunc(self.game)
           self:_invalidateStateHistoryOnOrAfterFrame(self.game.frame)
           self:_generateStateSnapshot()
-          self:_fastForwardToFrame(currFrame, true)
-          return true
+          return self:_fastForwardToFrame(currFrame, true)
         else
           return false
         end
@@ -166,8 +166,7 @@ function GameRunner:new(params)
       end
     end,
     fastForward = function(self, numFrames)
-      self:_fastForwardToFrame(self.game.frame + numFrames, true)
-      return true
+      return self:_fastForwardToFrame(self.game.frame + numFrames, true)
     end,
     clone = function(self)
       -- Create a new runner
@@ -188,28 +187,32 @@ function GameRunner:new(params)
     -- Private methods
     -- Set the game to the state it was in after the given frame
     _rewindToFrame = function(self, frame)
-      -- Get a state from before or on the given frame
-      local mostRecentState = nil
-      for _, state in ipairs(self._stateHistory) do
-        if state.frame <= frame and (mostRecentState == nil or mostRecentState.frame < state.frame) then
-          mostRecentState = state
+      if self._allowTimeManipulation then
+        -- Get a state from before or on the given frame
+        local mostRecentState = nil
+        for _, state in ipairs(self._stateHistory) do
+          if state.frame <= frame and (mostRecentState == nil or mostRecentState.frame < state.frame) then
+            mostRecentState = state
+          end
+        end
+        if mostRecentState then
+          -- Set the game to that state
+          self.game:setState(mostRecentState)
+          -- Then fast forward to the correct frame
+          return self:_fastForwardToFrame(frame, false)
         end
       end
-      if mostRecentState then
-        -- Set the game to that state
-        self.game:setState(mostRecentState)
-        -- Then fast forwad to the correct frame
-        self:_fastForwardToFrame(frame, false)
-        return true
-      else
-        -- The rewind could not occur
-        return false
-      end
+      return false
     end,
     -- Fast forwards the game to the given frame
     _fastForwardToFrame = function(self, frame, shouldGenerateStateSnapshots)
-      while self.game.frame < frame do
-        self:_moveGameForwardOneFrame(1 / 60, false, shouldGenerateStateSnapshots)
+      if self._allowTimeManipulation then
+        while self.game.frame < frame do
+          self:_moveGameForwardOneFrame(1 / 60, false, shouldGenerateStateSnapshots)
+        end
+        return true
+      else
+        return false
       end
     end,
     -- Generates a state snapshot and adds it to the state history
@@ -232,8 +235,7 @@ function GameRunner:new(params)
         -- All the state snapshots on or after the given frame are invalid now
         self:_invalidateStateHistoryOnOrAfterFrame(frame)
         -- Then play back to the frame we were just at, generating state history as we go
-        self:_fastForwardToFrame(currFrame, true)
-        return true
+        return self:_fastForwardToFrame(currFrame, true)
       else
         return false
       end
