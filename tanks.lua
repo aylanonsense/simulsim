@@ -179,7 +179,7 @@ local gameDef = simulsim.defineGame({
 
 -- Create a new network
 local server, client, clients = simulsim.createGameNetwork({
-  mode = 'test',
+  mode = 'development',
   numClients = 3,
   gameDefinition = gameDef
 })

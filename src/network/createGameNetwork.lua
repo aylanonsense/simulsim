@@ -11,10 +11,10 @@ local EmptyClient = require 'src/client-server/EmptyGameClient'
 
 function createNetwork(params)
   params = params or {}
-  local mode = params.mode or 'test'
+  local mode = params.mode or 'development'
 
   -- Create an in-memory network, which allows for neat things like simulating network conditions
-  if mode == 'test' then
+  if mode == 'development' then
     return createInMemoryNetwork(params)
   -- Create a localhost network using share.lua, though others won't be able to join
   elseif mode == 'localhost' then
