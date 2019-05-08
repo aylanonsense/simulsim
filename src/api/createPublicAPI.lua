@@ -114,7 +114,11 @@ function createPublicAPI(network)
   end
 
   -- Return APIs
-  return serverAPI, clientAPIs[1], clientAPIs
+  return {
+    server = serverAPI,
+    client = clientAPIs[1],
+    clients = clientAPIs
+  }
 end
 
 function createServerAPI(server, isServerSide)

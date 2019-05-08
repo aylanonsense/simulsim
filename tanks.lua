@@ -178,11 +178,12 @@ local gameDef = simulsim.defineGame({
 })
 
 -- Create a new network
-local server, client, clients = simulsim.createGameNetwork({
+local network = simulsim.createGameNetwork({
   mode = 'development',
   numClients = 3,
   gameDefinition = gameDef
 })
+local server, client, clients = network.server, network.client, network.clients
 
 local nextTankTeam = 1
 

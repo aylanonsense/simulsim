@@ -79,7 +79,7 @@ function Game:new(params)
           isMatch = criteria(entity)
         else
           isMatch = true
-          for k, v in pairs(search) do
+          for k, v in pairs(criteria) do
             if entity[k] ~= v then
               isMatch = false
               break
