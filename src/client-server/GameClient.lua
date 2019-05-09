@@ -331,8 +331,6 @@ function GameClient:new(params)
       end
     end,
     _handleDisconnect = function(self, reason)
-      self.clientId = nil
-      self.data = {}
       self._framesOfLatency = 0
       self._syncId = nil
       self._hasSyncedTime = false

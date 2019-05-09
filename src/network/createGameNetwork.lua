@@ -144,7 +144,7 @@ function createLocalhostShareNetwork(params)
     conn = ShareConnection:new({
       isLocalhost = true,
       port = port
-    })
+    }),
     framesBetweenFlushes = framesBetweenFlushes
   })
 
