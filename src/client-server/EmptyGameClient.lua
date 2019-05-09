@@ -11,21 +11,29 @@ function EmptyGameClient:new()
     -- Public methods
     connect = function(self, handshake) end,
     disconnect = function(self, reason) end,
-    isConnected = function(self) end,
     isConnecting = function(self) end,
+    isConnected = function(self) end,
+    isSynced = function(self) end,
+    getFramesOfLatency = function(self) end,
     fireEvent = function(self, eventType, eventData, params) end,
     setInputs = function(self, inputs, params) end,
     update = function(self, dt) end,
+    moveForwardOneFrame = function(self, dt) end,
     simulateNetworkConditions = function(self, params) end,
-    getFramesOfLatency = function(self) end,
-    syncEntityState = function(self, entity, presentState, futureState) end,
-    syncGameData = function(self, presentData, futureData) end,
-    isEntityUsingClientSidePrediction = function(self, entity) end,
+    syncEntity = function(self, game, entity, candidateEntity, isPrediction) end,
+    syncInputs = function(self, game, inputs, candidateInputs, isPrediction) end,
+    syncData = function(self, game, data, candidateData, isPrediction) end,
+    smoothEntity = function(self, game, entity, idealEntity) end,
+    smoothInputs = function(self, game, inputs, idealInputs) end,
+    smoothData = function(self, game, data, idealData) end,
+    isEntityUsingPrediction = function(self, entity) end,
 
     -- Callback methods
     onConnect = function(self, callback) end,
     onConnectFailure = function(self, callback) end,
-    onDisconnect = function(self, callback) end
+    onDisconnect = function(self, callback) end,
+    onSync = function(self, callback) end,
+    onDesync = function(self, callback) end
   }
 end
 

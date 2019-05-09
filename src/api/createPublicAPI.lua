@@ -102,15 +102,11 @@ function createPublicAPI(network)
   end
 
   -- Start the server
-  if network:isServerSide() then
-    network.server:startListening()
-  end
+  network.server:startListening()
 
   -- Connect the clients to the server
-  if network:isClientSide() then
-    for _, client in ipairs(network.clients) do
-      client:connect()
-    end
+  for _, client in ipairs(network.clients) do
+    client:connect()
   end
 
   -- Return APIs

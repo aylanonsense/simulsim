@@ -1,6 +1,8 @@
 -- Load dependencies
 local simulsim = require 'simulsim'
 
+print('tanks.lua loaded')
+
 -- Render constants
 local GAME_WIDTH = 200
 local GAME_HEIGHT = 200
