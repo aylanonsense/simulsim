@@ -6,8 +6,8 @@ function defineGame(params)
   return Game:define(params)
 end
 
-function createGameNetwork2(params)
-  return createPublicAPI(createGameNetwork(params))
+function createGameNetwork2(gameDefinition, params)
+  return createPublicAPI(createGameNetwork(gameDefinition, params))
 end
 
 return {

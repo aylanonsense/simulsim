@@ -109,12 +109,14 @@ function createPublicAPI(network)
     client:connect()
   end
 
-  -- Return APIs
-  return {
+  local networkAPI = {
     server = serverAPI,
     client = clientAPIs[1],
     clients = clientAPIs
   }
+
+  -- Return APIs
+  return networkAPI, serverAPI, clientAPIs[1], clientAPIs
 end
 
 function createServerAPI(server, isServerSide)
