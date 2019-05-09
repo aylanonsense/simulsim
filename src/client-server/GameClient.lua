@@ -17,10 +17,17 @@ function GameClient:new(params)
   -- Create a game for the client and a runner for it
   local runner = GameRunner:new({
     game = gameDefinition:new(),
+    isRenderable = true,
     allowTimeManipulation = false
   })
-  local runnerWithoutSmoothing = GameRunner:new({ game = gameDefinition:new() })
-  local runnerWithoutPrediction = GameRunner:new({ game = gameDefinition:new() })
+  local runnerWithoutSmoothing = GameRunner:new({
+    game = gameDefinition:new(),
+    isRenderable = false
+  })
+  local runnerWithoutPrediction = GameRunner:new({
+    game = gameDefinition:new(),
+    isRenderable = false
+  })
 
   -- Create offset optimizers to minimize time desync and latency
   local timeSyncOptimizer = OffsetOptimizer:new({

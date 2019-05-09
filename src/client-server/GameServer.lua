@@ -102,10 +102,10 @@ function GameServer:new(params)
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
 
   -- Create the game
-  local game = gameDefinition:new()
   local runner = GameRunner:new({
-    game = game,
-    framesOfHistory = maxClientEventFramesLate + 1
+    game = gameDefinition:new(),
+    framesOfHistory = maxClientEventFramesLate + 1,
+    isRenderable = false
   })
 
   -- Wrap the listener in a message server to make it easier to work with
@@ -124,7 +124,7 @@ function GameServer:new(params)
     _connectCallbacks = {},
 
     -- Public vars
-    game = game,
+    game = runner.game,
 
     -- Public methods
     -- Starts the server listening for new client connections

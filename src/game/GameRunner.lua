@@ -8,6 +8,7 @@ function GameRunner:new(params)
   local allowTimeManipulation = params.allowTimeManipulation ~= false
   local framesOfHistory = params.framesOfHistory or 30
   local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 5
+  local isRenderable = params.isRenderable ~= false
 
   return {
     -- Private vars
@@ -17,6 +18,7 @@ function GameRunner:new(params)
     _transformHistory = {},
     _allowTimeManipulation = allowTimeManipulation,
     _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
+    _isRenderable = isRenderable,
 
     -- Public vars
     game = game,
@@ -254,13 +256,13 @@ function GameRunner:new(params)
         else
           table.insert(nonInputEvents, event)
           self.game:resetEntityIdGeneration('event-' .. event.id .. '-')
-          self.game:handleEvent(event.type, event.data)
+          self.game:handleEvent(event.type, event.data, isTopFrame and self._isRenderable)
         end
       end
       -- Update the game
       self.game:resetEntityIdGeneration('frame-' .. self.game.frame .. '-')
       self.game:updateEntityMetadata(dt)
-      self.game:update(dt, self.game.inputs, nonInputEvents, isTopFrame)
+      self.game:update(dt, isTopFrame and self._isRenderable)
       -- Check to see if any scheduled states need to applied now
       for i = #self._futureStates, 1, -1 do
         if self._futureStates[i].frame == self.game.frame then

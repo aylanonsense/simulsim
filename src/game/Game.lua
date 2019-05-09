@@ -242,8 +242,8 @@ function Game:new(params)
     end,
 
     -- Methods to override
-    update = function(self, dt, inputs, events, isTopFrame) end,
-    handleEvent = function(self, eventType, eventData) end
+    update = function(self, dt, isRenderable) end,
+    handleEvent = function(self, eventType, eventData, isRenderable) end
   }
 
   if initialState then
