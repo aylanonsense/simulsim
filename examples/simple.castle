@@ -1,0 +1,8 @@
+---
+main: simple.lua
+name: Simulsim Example - Simple
+description: A very simple example game to teach you the basics of how to use simulsim.
+username: bridgs
+primaryColor: C0C0C0
+multiplayer:
+    - enabled: true

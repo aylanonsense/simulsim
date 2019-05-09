@@ -1,5 +1,5 @@
--- This is an example for possibly one of the simplest games you can make with
--- simulsim. It's just a bunch of squares running around together.
+-- This is a very simple example game meant to teach you the basics of simulsim
+-- It's just a bunch of squares running around together
 
 -- Load simulsim as a dependency (you should use a url for a specific commit)
 local simulsim = require 'https://raw.githubusercontent.com/bridgs/simulsim/master/simulsim.lua'
@@ -39,7 +39,7 @@ local network, server, client = simulsim.createGameNetwork(game, { mode = 'multi
 
 -- When a client connects to the server, spawn a playable entity for them to control
 function server.clientconnected(client)
-  server.fireEvent('spawn-player', { clientId = client.clientId, color = { math.random(), math.random(), math.random() } })
+  server.fireEvent('spawn-player', { clientId = client.clientId, color = { math.random(), 1, math.random() } })
 end
 
 -- When a client disconnects from the server, despawn their player entity

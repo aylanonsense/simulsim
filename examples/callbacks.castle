@@ -1,0 +1,8 @@
+---
+main: callbacks.lua
+name: Simulsim Example - Callbacks
+description: The client and server callbacks that simulsim defines
+username: bridgs
+primaryColor: C0C0C0
+multiplayer:
+    - enabled: true
