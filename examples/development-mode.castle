@@ -1,0 +1,7 @@
+---
+main: development-mode.lua
+name: Simulsim Example - Development Mode
+description: Showcasing the development mode of simulsim, which allows for simulating multiple clients and network conditions.
+username: bridgs
+multiplayer:
+    - enabled: true

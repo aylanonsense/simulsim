@@ -24,9 +24,11 @@ function game.handleEvent(self, type, data)
   if type == 'spawn-player' then
     self:spawnEntity({
       clientId = data.clientId,
-      color = data.color,
-      x = 190,
-      y = 190
+      x = data.x,
+      y = data.y,
+      width = 20,
+      height = 20,
+      color = data.color
     })
   -- Despawn a player
   elseif type == 'despawn-player' then
@@ -39,7 +41,12 @@ local network, server, client = simulsim.createGameNetwork(game, { mode = 'multi
 
 -- When a client connects to the server, spawn a playable entity for them to control
 function server.clientconnected(client)
-  server.fireEvent('spawn-player', { clientId = client.clientId, color = { math.random(), 1, math.random() } })
+  server.fireEvent('spawn-player', {
+    clientId = client.clientId,
+    x = 100 + 80 * math.random(),
+    y = 100 + 80 * math.random(),
+    color = { math.random(), 1, math.random() }
+  })
 end
 
 -- When a client disconnects from the server, despawn their player entity
@@ -60,12 +67,11 @@ end
 -- Draw the game for each client
 function client.draw()
   -- Clear the screen
-  love.graphics.clear(0, 0, 0)
   love.graphics.setColor(0.1, 0.1, 0.1)
   love.graphics.rectangle('fill', 0, 0, 400, 400)
   -- Draw each entity
   for _, entity in ipairs(client.game.entities) do
     love.graphics.setColor(entity.color)
-    love.graphics.rectangle('fill', entity.x, entity.y, 20, 20)
+    love.graphics.rectangle('fill', entity.x, entity.y, entity.width, entity.height)
   end
 end
