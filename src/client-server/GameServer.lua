@@ -9,8 +9,8 @@ function ServerSideGameClient:new(params)
   local server = params.server
   local clientId = params.clientId
   local connId = params.connId
-  local framesBetweenFlushes = params.framesBetweenFlushes or 3
-  local framesBetweenSnapshots = params.framesBetweenSnapshots or 25
+  local framesBetweenFlushes = params.framesBetweenFlushes or 2
+  local framesBetweenSnapshots = params.framesBetweenSnapshots or 35
 
   return {
     -- Private vars
@@ -98,6 +98,8 @@ function GameServer:new(params)
   params = params or {}
   local listener = params.listener
   local gameDefinition = params.gameDefinition
+  local framesBetweenFlushes = params.framesBetweenFlushes or 2
+  local framesBetweenSnapshots = params.framesBetweenSnapshots or 35
   local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
 
@@ -119,6 +121,8 @@ function GameServer:new(params)
     _nextClientId = 1,
     _clients = {},
     _runner = runner,
+    _framesBetweenFlushes = framesBetweenFlushes,
+    _framesBetweenSnapshots = framesBetweenSnapshots,
     _maxClientEventFramesLate = maxClientEventFramesLate,
     _maxClientEventFramesEarly = maxClientEventFramesEarly,
     _connectCallbacks = {},
@@ -224,7 +228,9 @@ function GameServer:new(params)
       local client = ServerSideGameClient:new({
         server = self,
         clientId = clientId,
-        connId = connId
+        connId = connId,
+        framesBetweenFlushes = self._framesBetweenFlushes,
+        framesBetweenSnapshots = self._framesBetweenSnapshots
       })
       local accept2 = function(clientData)
         -- Add the client data

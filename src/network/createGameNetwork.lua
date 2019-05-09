@@ -4,10 +4,10 @@ local LocalConnectionListener = require 'src/transport/LocalConnectionListener'
 local LocalConnection = require 'src/transport/LocalConnection'
 local ShareConnectionListener = require 'src/transport/ShareConnectionListener'
 local ShareConnection = require 'src/transport/ShareConnection'
-local Server = require 'src/client-server/GameServer'
-local Client = require 'src/client-server/GameClient'
-local EmptyServer = require 'src/client-server/EmptyGameServer'
-local EmptyClient = require 'src/client-server/EmptyGameClient'
+local GameServer = require 'src/client-server/GameServer'
+local GameClient = require 'src/client-server/GameClient'
+local EmptyGameServer = require 'src/client-server/EmptyGameServer'
+local EmptyGameClient = require 'src/client-server/EmptyGameClient'
 
 function createNetwork(params)
   params = params or {}
@@ -37,15 +37,19 @@ function createInMemoryNetwork(params)
   params = params or {}
   local gameDefinition = params.gameDefinition
   local numClients = params.numClients or 1
+  local framesBetweenFlushes = params.framesBetweenFlushes or 2
+  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
 
   -- Keep track of transport streams
   local transportStreams = {}
 
   -- Create the server
   local listener = LocalConnectionListener:new()
-  local server = Server:new({
+  local server = GameServer:new({
     gameDefinition = gameDefinition,
-    listener = listener
+    listener = listener,
+    framesBetweenFlushes = framesBetweenFlushes,
+    framesBetweenSnapshots = framesBetweenServerSnapshots
   })
 
   -- Create the clients
@@ -73,9 +77,10 @@ function createInMemoryNetwork(params)
       sendStream = clientToServer,
       receiveStream = serverToClient
     })
-    local client = Client:new({
+    local client = GameClient:new({
       gameDefinition = gameDefinition,
-      conn = clientConn
+      conn = clientConn,
+      framesBetweenFlushes = framesBetweenFlushes
     })
     table.insert(clients, client)
   end
@@ -119,23 +124,28 @@ function createLocalhostShareNetwork(params)
   params = params or {}
   local gameDefinition = params.gameDefinition
   local port = params.port
+  local framesBetweenFlushes = params.framesBetweenFlushes or 2
+  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
 
   -- Create the server
-  local server = Server:new({
+  local server = GameServer:new({
     gameDefinition = gameDefinition,
     listener = ShareConnectionListener:new({
       isLocalhost = true,
       port = port
-    })
+    }),
+    framesBetweenFlushes = framesBetweenFlushes,
+    framesBetweenSnapshots = framesBetweenServerSnapshots
   })
 
   -- Create the client
-  local client = Client:new({
+  local client = GameClient:new({
     gameDefinition = gameDefinition,
     conn = ShareConnection:new({
       isLocalhost = true,
       port = port
     })
+    framesBetweenFlushes = framesBetweenFlushes
   })
 
   -- Return a localhost network that uses share.lua
@@ -166,17 +176,21 @@ end
 function createServerSideShareNetwork(params)
   params = params or {}
   local gameDefinition = params.gameDefinition
+  local framesBetweenFlushes = params.framesBetweenFlushes or 2
+  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
 
   -- Create the server
-  local server = Server:new({
+  local server = GameServer:new({
     gameDefinition = gameDefinition,
     listener = ShareConnectionListener:new({
       isLocalhost = false
-    })
+    }),
+    framesBetweenFlushes = framesBetweenFlushes,
+    framesBetweenSnapshots = framesBetweenServerSnapshots
   })
 
   -- Create a fake client
-  local client = EmptyClient:new()
+  local client = EmptyGameClient:new()
 
   -- Return a localhost network that uses share.lua
   return {
@@ -204,16 +218,19 @@ end
 function createClientSideShareNetwork(params)
   params = params or {}
   local gameDefinition = params.gameDefinition
+  local framesBetweenFlushes = params.framesBetweenFlushes or 2
+  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
 
   -- Create a fake server
-  local server = EmptyServer:new()
+  local server = EmptyGameServer:new()
 
   -- Create the client
-  local client = Client:new({
+  local client = GameClient:new({
     gameDefinition = gameDefinition,
     conn = ShareConnection:new({
       isLocalhost = false
-    })
+    }),
+    framesBetweenFlushes = framesBetweenFlushes
   })
 
   -- Return a localhost network that uses share.lua

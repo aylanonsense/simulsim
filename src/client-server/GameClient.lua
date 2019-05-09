@@ -10,7 +10,7 @@ function GameClient:new(params)
   params = params or {}
   local conn = params.conn
   local gameDefinition = params.gameDefinition
-  local framesBetweenFlushes = params.framesBetweenFlushes or 3
+  local framesBetweenFlushes = params.framesBetweenFlushes or 2
   local framesBetweenPings = params.framesBetweenPings or 15
   local maxFramesOfLatency = params.maxFramesOfLatency or 180
 
