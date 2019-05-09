@@ -179,8 +179,7 @@ local gameDef = simulsim.defineGame({
 
 -- Create a new network
 local network = simulsim.createGameNetwork({
-  mode = 'development',
-  numClients = 3,
+  mode = 'multiplayer',
   gameDefinition = gameDef
 })
 local server, client, clients = network.server, network.client, network.clients

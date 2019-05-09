@@ -1,5 +1,5 @@
 ---
-main: new-api.lua
+main: tanks.lua
 name: simulsim example
 username: bridgs
 primaryColor: FF00FF
