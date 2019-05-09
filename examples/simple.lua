@@ -1,5 +1,8 @@
--- Load simulsim as a dependency (you should use a url from GitHub, preferably for a specific commit)
-local simulsim = require 'simulsim'
+-- This is an example for possibly one of the simplest games you can make with
+-- simulsim. It's just a bunch of squares running around together.
+
+-- Load simulsim as a dependency (you should use a url for a specific commit)
+local simulsim = require 'https://raw.githubusercontent.com/bridgs/simulsim/master/simulsim.lua'
 
 -- Define a new game
 local game = simulsim.defineGame()
