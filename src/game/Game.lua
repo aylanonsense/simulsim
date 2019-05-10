@@ -30,7 +30,7 @@ function Game:new(params)
         inputs = tableUtils.cloneTable(self.inputs)
       }
       for _, entity in ipairs(self.entities) do
-        table.insert(state.entities, tableUtils.cloneTable(self:getEntityState(entity)))
+        table.insert(state.entities, tableUtils.cloneTable(self:serializeEntity(entity)))
       end
       return state
     end,
@@ -40,7 +40,7 @@ function Game:new(params)
       if state.entities then
         self.entities = {}
         for _, entityState in ipairs(state.entities) do
-          table.insert(self.entities, self:createEntityFromState(tableUtils.cloneTable(entityState)))
+          table.insert(self.entities, self:deserializeEntity(tableUtils.cloneTable(entityState)))
         end
       end
       if state.data then
@@ -63,6 +63,9 @@ function Game:new(params)
       clonedGame:setState(self:getState())
       -- Return the newly-cloned game
       return clonedGame
+    end,
+    getInputsForClient = function(self, clientId)
+      return self.inputs[clientId]
     end,
     -- Gets an entity with the given id
     getEntityById = function(self, entityId)
@@ -195,11 +198,11 @@ function Game:new(params)
       return entityId
     end,
     -- Transforms a fully-hydrated entity (with methods, etc) into a simple state object
-    getEntityState = function(self, entity)
+    serializeEntity = function(self, entity)
       return entity
     end,
     -- Transforms a simple state object into a fully-hydrated entity
-    createEntityFromState = function(self, state)
+    deserializeEntity = function(self, state)
       return tableUtils.cloneTable(state)
     end,
     isSyncEnabledForEntity = function(self, entity)

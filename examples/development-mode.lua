@@ -1,5 +1,5 @@
 -- This is a demo of simulsim's development functionality, which lets you
--- simulate a multiplayer game with multiple clients on one computer.
+-- simulate a multiplayer game with multiple clients on one computer
 
 -- Load simulsim as a dependency (you should use a url for a specific commit)
 local simulsim = require 'https://raw.githubusercontent.com/bridgs/simulsim/master/simulsim.lua'
@@ -8,7 +8,7 @@ local simulsim = require 'https://raw.githubusercontent.com/bridgs/simulsim/mast
 local game = simulsim.defineGame()
 function game.update(self, dt)
   for _, entity in ipairs(self.entities) do
-    local inputs = self.inputs[entity.clientId] or {}
+    local inputs = self:getInputsForClient(entity.clientId) or {}
     local moveX = (inputs.right and 1 or 0) - (inputs.left and 1 or 0)
     local moveY = (inputs.down and 1 or 0) - (inputs.up and 1 or 0)
     entity.x = math.min(math.max(0, entity.x + 200 * moveX * dt), 380)
