@@ -2,7 +2,7 @@
 -- It's just a bunch of squares running around together
 
 -- Load simulsim as a dependency (you should use a url for a specific commit)
-local simulsim = require 'https://raw.githubusercontent.com/bridgs/simulsim/master/simulsim.lua'
+local simulsim = require 'simulsim'
 
 -- Define a new game
 local game = simulsim.defineGame()
@@ -32,7 +32,7 @@ function game.handleEvent(self, type, data)
     })
   -- Despawn a player
   elseif type == 'despawn-player' then
-    self:despawnEntity(self:getEntityWhere({ clientId = data.clientid }))
+    self:despawnEntity(self:getEntityWhere({ clientId = data.clientId }))
   end
 end
 

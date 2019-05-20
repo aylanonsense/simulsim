@@ -2,10 +2,14 @@ local MessageClient = {}
 function MessageClient:new(params)
   params = params or {}
   local conn = params.conn
+  local numConnectRetries = params.numConnectRetries or 8
 
   local client = {
     -- Private vars
     _status = 'disconnected',
+    _numConnectRetries = numConnectRetries,
+    _retriesLeft = 0,
+    _timeSinceRetry = 0.00,
     _conn = conn,
     _handshake = nil,
     _bufferedMessages = {},
@@ -19,6 +23,8 @@ function MessageClient:new(params)
     connect = function(self, handshake)
       if self._status == 'disconnected' then
         self._status = 'connecting'
+        self._retriesLeft = self._numConnectRetries
+        self._timeSinceRetry = 0.00
         self._handshake = handshake
         -- Begin actually connecting
         self._conn:connect()
@@ -69,6 +75,19 @@ function MessageClient:new(params)
     end,
     update = function(self, dt)
       self._conn:update(dt)
+      -- Retry connection request
+      if self._status == 'handshaking' then
+        self._timeSinceRetry = self._timeSinceRetry + dt
+        if self._timeSinceRetry >= 1.000 then
+          if self._retriesLeft <= 0 then
+            self:disconnect('Could not connect after ' .. self._numConnectRetries .. ' retries')
+          else
+            self._retriesLeft = self._retriesLeft - 1
+            self._timeSinceRetry = 0.00
+            self._conn:send({ 'connect-request', self._handshake })
+          end
+        end
+      end
     end,
     simulateNetworkConditions = function(self, params)
       self._conn:simulateNetworkConditions(params)
@@ -93,6 +112,8 @@ function MessageClient:new(params)
       -- Ready to begin handshaking
       if self._status == 'connecting' then
         self._status = 'handshaking'
+        self._retriesLeft = 5
+        self._timeSinceRetry = 0.00
         self._conn:send({ 'connect-request', self._handshake })
       -- Otherwise if we shouldn't be connected, silently end the connection
       elseif self._status == 'disconnected' then

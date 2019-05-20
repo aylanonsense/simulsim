@@ -1,9 +1,12 @@
+local logger = require 'src/utils/logger'
+
 local LocalConnection = {}
 function LocalConnection:new(params)
   params = params or {}
   local isClient = params.isClient or false
   local sendStream = params.sendStream
   local receiveStream = params.receiveStream
+  local latencySpikeChance = params.latencySpikeChance or 0.00
 
   local conn = {
     -- Private vars
@@ -11,6 +14,8 @@ function LocalConnection:new(params)
     _isClient = isClient,
     _sendStream = sendStream,
     _receiveStream = receiveStream,
+    _latencySpikeChance = latencySpikeChance,
+    _timeUntilLatencySpikeCheck = 0.00,
     _connectCallbacks = {},
     _disconnectCallbacks = {},
     _receiveCallbacks = {},
@@ -32,7 +37,22 @@ function LocalConnection:new(params)
     send = function(self, msg)
       self._sendStream:send({ 'message', msg })
     end,
-    update = function(self, dt) end,
+    update = function(self, dt)
+      if self._latencySpikeChance > 0.00 then
+        self._timeUntilLatencySpikeCheck = self._timeUntilLatencySpikeCheck - dt
+        if self._timeUntilLatencySpikeCheck <= 0.00 then
+          if math.random() >= self._latencySpikeChance then
+            self._sendStream:stopLatencySpike()
+            self._receiveStream:stopLatencySpike()
+          else
+            logger.debug('Simulating latency spike for the next 5 seconds')
+            self._sendStream:startLatencySpike()
+            self._receiveStream:startLatencySpike()
+          end
+          self._timeUntilLatencySpikeCheck = 5.00
+        end
+      end
+    end,
     simulateNetworkConditions = function(self, params)
       params = params or {}
       local sendParams = {}
@@ -49,6 +69,9 @@ function LocalConnection:new(params)
       if params.packetLossChance then
         sendParams.packetLossChance = params.packetLossChance
         receiveParams.packetLossChance = params.packetLossChance
+      end
+      if params.latencySpikeChance then
+        self._latencySpikeChance = params.latencySpikeChance
       end
       self._sendStream:simulateNetworkConditions(sendParams)
       self._receiveStream:simulateNetworkConditions(receiveParams)

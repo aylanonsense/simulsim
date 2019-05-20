@@ -4,6 +4,7 @@ local GameRunner = require 'src/game/GameRunner'
 local OffsetOptimizer = require 'src/transport/OffsetOptimizer'
 local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
+local logger = require 'src/utils/logger'
 
 local GameClient = {}
 function GameClient:new(params)
@@ -47,12 +48,15 @@ function GameClient:new(params)
     _runner = runner,
     _runnerWithoutSmoothing = runnerWithoutSmoothing,
     _runnerWithoutPrediction = runnerWithoutPrediction,
-    _hasSyncedTime = false,
-    _hasSyncedLatency = false,
+    _clientFrame = 0,
+    _hasSetInitialState = false,
+    _hasStabilizedTimeOffset = false,
+    _hasStabilizedLatency = false,
+    _framesOfStableTimeOffset = 0,
+    _framesOfStableLatency = 0,
     _messageClient = messageClient,
     _timeSyncOptimizer = timeSyncOptimizer,
     _latencyOptimizer = latencyOptimizer,
-    _syncId = nil,
     _framesOfLatency = 0,
     _framesUntilNextPing = framesBetweenPings,
     _framesUntilNextFlush = framesBetweenFlushes,
@@ -62,8 +66,8 @@ function GameClient:new(params)
     _connectCallbacks = {},
     _connectFailureCallbacks = {},
     _disconnectCallbacks = {},
-    _syncCallbacks = {},
-    _desyncCallbacks = {},
+    _stabilizeCallbacks = {},
+    _destabilizeCallbacks = {},
 
     -- Public vars
     clientId = nil,
@@ -74,6 +78,7 @@ function GameClient:new(params)
 
     -- Public methods
     connect = function(self, handshake)
+      logger.info('Client connecting to server')
       self._messageClient:connect(handshake)
     end,
     disconnect = function(self, reason)
@@ -85,8 +90,8 @@ function GameClient:new(params)
     isConnected = function(self)
       return self._messageClient:isConnected()
     end,
-    isSynced = function(self)
-      return self._hasSyncedTime and self._hasSyncedLatency
+    isStable = function(self)
+      return self._hasSetInitialState and self._hasStabilizedTimeOffset and self._hasStabilizedLatency
     end,
     getFramesOfLatency = function(self)
       return self._framesOfLatency
@@ -95,6 +100,9 @@ function GameClient:new(params)
       params = params or {}
       local isInputEvent = params.isInputEvent
       local predictClientSide = params.predictClientSide ~= false
+      local maxFramesLate = params.maxFramesLate or 0
+      local maxFramesEarly = params.maxFramesEarly or 20
+      local applyImmediatelyWhenEarly = params.applyImmediatelyWhenEarly == true
       if self._messageClient:isConnected() then
         -- Create a new event
         local event = self:_addClientMetadata({
@@ -104,6 +112,9 @@ function GameClient:new(params)
           data = eventData,
           isInputEvent = isInputEvent
         })
+        event.clientMetadata.maxFramesLate = maxFramesLate
+        event.clientMetadata.maxFramesEarly = maxFramesEarly
+        event.clientMetadata.applyImmediatelyWhenEarly = applyImmediatelyWhenEarly
         -- Apply a prediction of the event
         if predictClientSide then
           local serverEvent = tableUtils.cloneTable(event)
@@ -133,79 +144,119 @@ function GameClient:new(params)
     setInputs = function(self, inputs, params)
       params = params or {}
       params.isInputEvent = true
-      if self._messageClient:isConnected() then
-        self:fireEvent('set-inputs', {
-          clientId = self.clientId,
-          inputs = inputs
-        }, params)
-      end
+      params.maxFramesLate = params.maxFramesLate or 3
+      params.maxFramesEarly = params.maxFramesEarly or 30
+      return self:fireEvent('set-inputs', {
+        clientId = self.clientId,
+        inputs = inputs
+      }, params)
     end,
     update = function(self, dt)
       -- Update the underlying messaging client
       self._messageClient:update(dt)
     end,
     moveForwardOneFrame = function(self, dt)
-      local wasSynced = self._hasSyncedTime and self._hasSyncedLatency
+      self._clientFrame = self._clientFrame + 1
       -- Update the game (via the game runner)
       self._runner:moveForwardOneFrame(dt)
       self._runnerWithoutSmoothing:moveForwardOneFrame(dt)
       self._runnerWithoutPrediction:moveForwardOneFrame(dt)
       if self._messageClient:isConnected() then
+        local wasStable = self._hasSetInitialState and self._hasStabilizedTimeOffset and self._hasStabilizedLatency
         -- Update the timing and latency optimizers
         self._timeSyncOptimizer:moveForwardOneFrame(dt)
         self._latencyOptimizer:moveForwardOneFrame(dt)
+        -- Check to see if we've stabilized
+        if self._hasSetInitialState then
+          self._framesOfStableTimeOffset = self._framesOfStableTimeOffset + 1
+          if self._framesOfStableTimeOffset > 60 then
+            self._hasStabilizedTimeOffset = true
+          end
+          if self._hasStabilizedTimeOffset then
+            self._framesOfStableLatency = self._framesOfStableLatency + 1
+            if self._framesOfStableLatency > 60 then
+              self._hasStabilizedLatency = true
+            end
+          end
+        end
         -- Rewind or fast forward the game to get it synced with the server
         local timeAdjustment = self._timeSyncOptimizer:getRecommendedAdjustment()
-        if self._hasSyncedTime and timeAdjustment then
+        if timeAdjustment and self._hasSetInitialState then
+          self._timeSyncOptimizer:reset()
+          -- If the time offset optimizer is recommending a huge adjustment, that means we've desynced
           if timeAdjustment > 90 or timeAdjustment < -90 then
-            self:_handleDesync()
+            logger.info('Client ' .. self.clientId .. ' destabilized due to time becoming too desynced [frame=' .. self.game.frame .. ']')
+            self:_handleDestabilize()
+          -- Otherwise, adjust the time offset
           elseif timeAdjustment ~= 0 then
+            self._framesOfStableTimeOffset = 0
+            if timeAdjustment > 2 or timeAdjustment < -2 then
+              self._hasStabilizedTimeOffset = false
+              self._hasStabilizedLatency = false
+              self._framesOfStableLatency = 0
+            end
+            -- Fast forward if we're behind the states the server is sending us
             if timeAdjustment > 0 then
+              logger.debug('Client ' .. self.clientId .. ' fast forwarding ' .. timeAdjustment .. ' frames to sync time with server [frame=' .. self.game.frame .. ']')
               local fastForward1Successful = self._runnerWithoutSmoothing:fastForward(timeAdjustment)
               local fastForward2Successful = self._runnerWithoutPrediction:fastForward(timeAdjustment)
               if not fastForward1Successful or not fastForward2Successful then
-                self:_handleDesync()
+                logger.info('Client ' .. self.clientId .. ' destabilized due to failed fast forward [frame=' .. self.game.frame .. ']')
+                self:_handleDestabilize()
               end
+            -- Rewind if we're ahead of the states the server is sending us
             elseif timeAdjustment < 0 then
+              logger.debug('Client ' .. self.clientId .. ' rewinding ' .. timeAdjustment .. ' frames to sync time with server [frame=' .. self.game.frame .. ']')
               local rewind1Successful = self._runnerWithoutSmoothing:rewind(-timeAdjustment)
               local rewind2Successful = self._runnerWithoutPrediction:rewind(-timeAdjustment)
               if not rewind1Successful or not rewind2Successful then
-                self:_handleDesync()
+                logger.info('Client ' .. self.clientId .. ' destabilized due to failed rewind [frame=' .. self.game.frame .. ']')
+                self:_handleDestabilize()
               end
-            end
-            if self._hasSyncedTime then
-              self._timeSyncOptimizer:reset()
-              if -5 < timeAdjustment and timeAdjustment < 5 then
-                self._framesOfLatency = math.min(math.max(0, self._framesOfLatency - timeAdjustment), self._maxFramesOfLatency)
-                self._latencyOptimizer:reset()
-              end
-              self._syncId = stringUtils.generateRandomString(6)
             end
           end
         end
         -- Adjust latency to ensure messages are arriving on time server-side
         local latencyAdjustment = self._latencyOptimizer:getRecommendedAdjustment()
-        if self._hasSyncedTime and latencyAdjustment then
+        if latencyAdjustment and self._hasSetInitialState and self._hasStabilizedTimeOffset then
+          self._latencyOptimizer:reset()
+          -- If the latency optimizer is recommending a huge adjustment, that means we've destabilized
           if latencyAdjustment > 90 or latencyAdjustment < -90 then
-            self:_handleDesync()
-          else
-            self._hasSyncedLatency = true
-            if self._hasSyncedTime and latencyAdjustment ~= 0 then
-              self._framesOfLatency = math.min(math.max(0, self._framesOfLatency - latencyAdjustment), self._maxFramesOfLatency)
-              self._syncId = stringUtils.generateRandomString(6)
-              self._latencyOptimizer:reset()
+            self._framesOfLatency = 20
+            logger.info('Client ' .. self.clientId .. ' destabilized due to latency becoming too desynced [frame=' .. self.game.frame .. ']')
+            self:_handleDestabilize()
+          -- Otherwise, adjust the latency
+          elseif latencyAdjustment ~= 0 then
+            self._framesOfStableLatency = 0
+            if latencyAdjustment > 2 or latencyAdjustment < -2 then
+              self._hasStabilizedLatency = false
             end
-            if not wasSynced then
-              for _, callback in ipairs(self._syncCallbacks) do
-                callback()
-              end
+            if latencyAdjustment < 0 then
+              latencyAdjustment = math.floor(1.15 * latencyAdjustment)
             end
+            local prevFramesOfLatency = self._framesOfLatency
+            self._framesOfLatency = math.min(math.max(0, self._framesOfLatency - latencyAdjustment), self._maxFramesOfLatency)
+            local change = self._framesOfLatency - prevFramesOfLatency
+            logger.info('Client ' .. self.clientId .. ' adjusting latency from ' .. prevFramesOfLatency .. ' to ' .. self._framesOfLatency .. ' frames (' .. (change >= 0 and '+' .. change or change) .. ') [frame=' .. self.game.frame .. ']')
+          end
+        end
+        -- Check for stabilizing or destabilizing
+        local isStable = self._hasSetInitialState and self._hasStabilizedTimeOffset and self._hasStabilizedLatency
+        if wasStable and not isStable then
+          self._framesUntilNextPing = 0
+          for _, callback in ipairs(self._destabilizeCallbacks) do
+            callback()
+          end
+        elseif isStable and not wasStable then
+          logger.info('Client ' .. self.clientId .. ' stabilized connection to server [frame=' .. self.game.frame .. ']')
+          for _, callback in ipairs(self._stabilizeCallbacks) do
+            callback()
           end
         end
         -- Send a lazy ping every so often to gauge latency accuracy
         self._framesUntilNextPing = self._framesUntilNextPing - 1
         if self._framesUntilNextPing <= 0 then
-          self._framesUntilNextPing = self._framesBetweenPings
+          self._framesUntilNextPing = isStable and self._framesBetweenPings or 2
           self:_ping()
         end
       end
@@ -282,28 +333,27 @@ function GameClient:new(params)
     onDisconnect = function(self, callback)
       table.insert(self._disconnectCallbacks, callback)
     end,
-    onSync = function(self, callback)
-      table.insert(self._syncCallbacks, callback)
+    onStabilize = function(self, callback)
+      table.insert(self._stabilizeCallbacks, callback)
     end,
-    onDesync = function(self, callback)
-      table.insert(self._desyncCallbacks, callback)
+    onDestabilize = function(self, callback)
+      table.insert(self._destabilizeCallbacks, callback)
     end,
 
     -- Private methods
     _handleConnect = function(self, connectionData)
       self.clientId = connectionData[1]
+      logger.info('Client ' .. self.clientId .. ' connected to server [frame=' .. connectionData[3].frame .. ']')
       self.data = connectionData[2]
-      self._framesOfLatency = 45
-      self:_syncWithState(connectionData[3])
+      self._framesOfLatency = 20
+      self:_setInitialState(connectionData[3])
       -- Trigger connect callbacks
       for _, callback in ipairs(self._connectCallbacks) do
         callback()
       end
     end,
-    _syncWithState = function(self, state)
-      self._hasSyncedTime = true
-      self._hasSyncedLatency = false
-      self._syncId = stringUtils.generateRandomString(6)
+    _setInitialState = function(self, state)
+      self._hasSetInitialState = true
       self._framesUntilNextPing = 0
       self._framesUntilNextFlush = 0
       self._timeSyncOptimizer:reset()
@@ -314,27 +364,27 @@ function GameClient:new(params)
       self._runnerWithoutPrediction:reset()
       self._runnerWithoutPrediction:setState(state)
     end,
-    _handleDesync = function(self)
-      local wasSynced = self._hasSyncedTime and self._hasSyncedLatency
-      self._hasSyncedTime = false
-      self._hasSyncedLatency = false
-      if wasSynced then
-        for _, callback in ipairs(self._desyncCallbacks) do
-          callback()
-        end
-      end
+    _handleDestabilize = function(self)
+      self._hasSetInitialState = false
+      self._hasStabilizedTimeOffset = false
+      self._hasStabilizedLatency = false
+      self._framesOfStableTimeOffset = 0
+      self._framesOfStableLatency = 0
+      self._timeSyncOptimizer:reset()
+      self._latencyOptimizer:reset()
     end,
     _handleConnectFailure = function(self, reason)
+      logger.info('Client failed to connect to server: ' .. (reason or 'No reason given'))
       -- Trigger connect failure callbacks
       for _, callback in ipairs(self._connectFailureCallbacks) do
         callback(reason or 'Failed to connect to server')
       end
     end,
     _handleDisconnect = function(self, reason)
+      logger.info('Client ' .. self.clientId .. ' disconnected from server: ' .. (reason or 'No reason given') .. '[frame=' .. self.game.frame .. ']')
       self._framesOfLatency = 0
-      self._syncId = nil
-      self._hasSyncedTime = false
-      self._hasSyncedLatency = false
+      self._hasSetInitialState = false
+      self._hasStabilizedLatency = false
       -- Trigger dicconnect callbacks
       for _, callback in ipairs(self._disconnectCallbacks) do
         callback(reason or 'Connection terminated')
@@ -352,16 +402,23 @@ function GameClient:new(params)
       end
     end,
     _handleReceiveEvent = function(self, event)
-      self:_recordTimeSyncOffset(event.frame)
+      if event.serverMetadata and event.serverMetadata.frame then
+        self:_recordTimeOffset(event.serverMetadata.frame)
+      end
+      local preservedFrameAdjustment = 0
+      if event.serverMetadata and event.serverMetadata.proposedEventFrame then
+        preservedFrameAdjustment = event.frame - event.serverMetadata.proposedEventFrame
+      end
       self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
-      self:_applyEvent(event)
+      self:_applyEvent(event, { preservedFrameAdjustment = preservedFrameAdjustment })
     end,
     _handleRejectEvent = function(self, event)
+      logger.silly('Client ' .. self.clientId .. ' informed that "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server [frame=' .. self.game.frame .. ']')
       self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
       self:_unapplyEvent(event)
     end,
     _handlePingResponse = function(self, ping)
-      self:_recordTimeSyncOffset(ping.frame)
+      self:_recordTimeOffset(ping.frame)
       self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata)
     end,
     _syncToTargetGame = function(self, sourceGame, targetGame, isPrediction)
@@ -412,10 +469,10 @@ function GameClient:new(params)
       sourceGame.inputs = self:syncInputs(sourceGame, sourceGame.inputs, tableUtils.cloneTable(targetGame.inputs), isPrediction)
     end,
     _handleStateSnapshot = function(self, state)
-      if not self._hasSyncedTime then
-        self:_syncWithState(state)
+      if not self._hasSetInitialState then
+        self:_setInitialState(state)
       else
-        self:_recordTimeSyncOffset(state.frame)
+        self:_recordTimeOffset(state.frame)
         -- state represents what the game would currently look like with no client-side prediction
         self._runnerWithoutPrediction:applyState(state)
         -- Fix client-predicted inconsistencies in the past
@@ -429,6 +486,7 @@ function GameClient:new(params)
       end
     end,
     _smoothGame = function(self)
+      local isStable = self._hasSetInitialState and self._hasStabilizedTimeOffset and self._hasStabilizedLatency
       local sourceGame = self.game
       local targetGame = self.gameWithoutSmoothing:clone()
       -- Just copy the current frame
@@ -439,7 +497,12 @@ function GameClient:new(params)
         local id = targetGame:getEntityId(targetEntity)
         entityExistsInTargetGame[id] = true
         local sourceEntity, index = sourceGame:getEntityById(id)
-        local smoothedEntity = self:smoothEntity(sourceGame, sourceEntity, targetEntity)
+        local smoothedEntity
+        if isStable or not sourceEntity then
+          smoothedEntity = self:smoothEntity(sourceGame, sourceEntity, targetEntity)
+        else
+          smoothedEntity = sourceEntity
+        end
         -- Entity was removed
         if not smoothedEntity and sourceEntity then
           table.remove(sourceGame.entities, index)
@@ -456,7 +519,12 @@ function GameClient:new(params)
         local sourceEntity = sourceGame.entities[index]
         local id = sourceGame:getEntityId(sourceEntity)
         if not entityExistsInTargetGame[id] then
-          local smoothedEntity = self:smoothEntity(sourceGame, sourceEntity, nil)
+          local smoothedEntity
+          if isStable then
+            smoothedEntity = self:smoothEntity(sourceGame, sourceEntity, nil)
+          else
+            smoothedEntity = sourceEntity
+          end
           -- Entity was removed
           if not smoothedEntity then
             table.remove(sourceGame.entities, index)
@@ -471,12 +539,12 @@ function GameClient:new(params)
       -- Smooth data
       sourceGame.data = self:smoothData(sourceGame, sourceGame.data, targetGame.data)
     end,
-    _applyEvent = function(self, event)
+    _applyEvent = function(self, event, params)
       if event.frame > self._runner.game.frame then
-        self._runner:applyEvent(event)
+        self._runner:applyEvent(event, params)
       end
-      self._runnerWithoutPrediction:applyEvent(event)
-      return self._runnerWithoutSmoothing:applyEvent(event)
+      self._runnerWithoutPrediction:applyEvent(event, params)
+      return self._runnerWithoutSmoothing:applyEvent(event, params)
     end,
     _unapplyEvent = function(self, event)
       if event.frame > self._runner.game.frame then
@@ -497,25 +565,22 @@ function GameClient:new(params)
       local frame = self.gameWithoutSmoothing.frame
       obj.clientMetadata = {
         clientId = self.clientId,
-        frameSent = frame,
-        expectedFrameReceived = frame + self._framesOfLatency,
-        framesOfLatency = self._framesOfLatency,
-        syncId = self._syncId
+        clientFrameSent = self._clientFrame
       }
       return obj
     end,
-    _recordTimeSyncOffset = function(self, frame)
-      if self._hasSyncedTime then
+    _recordTimeOffset = function(self, frame)
+      if self._hasSetInitialState then
         self._timeSyncOptimizer:recordOffset(frame - self.gameWithoutSmoothing.frame - 1)
       end
     end,
     _recordLatencyOffset = function(self, clientMetadata, serverMetadata)
-      if self._hasSyncedTime then
-        if clientMetadata and clientMetadata.clientId == self.clientId and clientMetadata.syncId == self._syncId then
-          if serverMetadata and serverMetadata.frameReceived then
-            self._latencyOptimizer:recordOffset(clientMetadata.expectedFrameReceived - serverMetadata.frameReceived)
-          end
-        end
+      if clientMetadata and clientMetadata.clientId == self.clientId and serverMetadata and serverMetadata.frame then
+        -- Figure out when we'd expect the packet to arrive if it had been sent with current network conditions
+        local timeOffsetNow = self.gameWithoutSmoothing.frame - self._clientFrame
+        local latencyNow = self._framesOfLatency
+        local expectedFrameReceived = clientMetadata.clientFrameSent + timeOffsetNow + latencyNow
+        self._latencyOptimizer:recordOffset(expectedFrameReceived - serverMetadata.frame)
       end
     end
   }

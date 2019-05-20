@@ -2,6 +2,7 @@
 local MessageServer = require 'src/client-server/MessageServer'
 local GameRunner = require 'src/game/GameRunner'
 local stringUtils = require 'src/utils/string'
+local logger = require 'src/utils/logger'
 
 local ServerSideGameClient = {}
 function ServerSideGameClient:new(params)
@@ -154,12 +155,12 @@ function GameServer:new(params)
     -- Fires an event for the game and lets all clients know
     fireEvent = function(self, eventType, eventData, params)
       -- Create an event
-      local event = {
+      local event = self:_addServerMetadata({
         id = 'server-' .. stringUtils.generateRandomString(10),
         frame = self.game.frame + 1,
         type = eventType,
         data = eventData
-      }
+      })
       -- Apply the event server-side and let the clients know about it
       self:_applyEvent(event, params)
       -- Return the event
@@ -217,7 +218,7 @@ function GameServer:new(params)
     end,
     _addServerMetadata = function(self, obj)
       obj.serverMetadata = {
-        frameReceived = self.game.frame
+        frame = self.game.frame
       }
       return obj
     end,
@@ -233,6 +234,7 @@ function GameServer:new(params)
         framesBetweenSnapshots = self._framesBetweenSnapshots
       })
       local accept2 = function(clientData)
+        logger.info('Server accepted connection from client ' .. clientId .. ' [frame=' .. self.game.frame .. ']')
         -- Add the client data
         client.data = clientData
         -- Insert the client into the list of clients
@@ -244,11 +246,16 @@ function GameServer:new(params)
           callback(client)
         end
       end
-      self:handleConnectRequest(client, handshake, accept2, reject)
+      local reject2 = function(reason)
+        logger.info('Server rejected connection from client ' .. clientId .. ': ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
+        reject(reason)
+      end
+      self:handleConnectRequest(client, handshake, accept2, reject2)
     end,
     _handleDisconnect = function(self, connId, reason)
       local client, i = self:_getClientByConnId(connId)
       if client then
+        logger.info('Server disconnecting client ' .. client.clientId .. ': ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
         -- Remove the client
         table.remove(self._clients, i)
         -- Trigger the client's disconnect callbacks
@@ -261,12 +268,39 @@ function GameServer:new(params)
         if messageType == 'event' then
           -- Add some metadata onto the event recording the fact that it was received
           local event = self:_addServerMetadata(messageContent)
-          -- TODO reject if too far in the past
-          -- TODO update frame if in the past and adjusting is allowed
           local eventApplied = false
-          if self.game.frame - self._maxClientEventFramesLate < event.frame and event.frame <= self.game.frame + 1 + self._maxClientEventFramesEarly and self:shouldAcceptEventFromClient(client, event) then
-            -- Apply the event server-side and let all clients know about it
-            eventApplied = self:_applyEvent(event)
+          if self:shouldAcceptEventFromClient(client, event) then
+            local frameOffset = event.frame - self.game.frame - 1 -- positive is early, negative is late
+            local maxFramesEarly = self._maxClientEventFramesEarly
+            local maxFramesLate = self._maxClientEventFramesLate
+            if event.clientMetadata then
+              if event.clientMetadata.maxFramesLate then
+                maxFramesLate = event.clientMetadata.maxFramesLate
+              end
+              if event.clientMetadata.maxFramesEarly then
+                maxFramesEarly = event.clientMetadata.maxFramesEarly
+              end
+            end
+            local isTooEarly = (frameOffset > maxFramesEarly)
+            local isTooLate = ((-frameOffset) > maxFramesLate)
+            if not isTooEarly and not isTooLate then
+              if event.isInputEvent and event.type == 'set-inputs' and self.game.frameOfLastInput[client.clientId] and self.game.frameOfLastInput[client.clientId] > event.frame then
+                logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because newer inputs have already been applied [frame=' .. self.game.frame .. ']')
+              else
+                event.serverMetadata.proposedEventFrame = event.frame
+                -- Apply the event server-side and let all clients know about it
+                if (frameOffset <= 0 or (frameOffset > 0 and event.clientMetadata and event.clientMetadata.applyImmediatelyWhenEarly)) and event.frame ~= self.game.frame + 1 then
+                  logger.silly('Server adjusting "' .. event.type .. '" event from client ' .. client.clientId .. ' from frame=' .. event.frame .. ' to ' .. (self.game.frame + 1) .. ' [frame=' .. self.game.frame .. ']')
+                  event.frame = self.game.frame + 1
+                end
+                eventApplied = self:_applyEvent(event)
+                if not eventApplied then
+                  logger.silly('Server failed to apply "' .. event.type .. '" event from client ' .. client.clientId .. ' [frame=' .. self.game.frame .. ']')
+                end
+              end
+            else
+              logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because it was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'too early' or 'too late') .. ' [frame=' .. self.game.frame .. ']')
+            end
           end
           if not eventApplied then
             -- Let the client know that their event was rejected or wasn't able to be applied

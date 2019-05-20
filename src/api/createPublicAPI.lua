@@ -76,12 +76,12 @@ function createPublicAPI(network)
       cb(dt, ...)
     end
     -- Figure out how many frames have passed
-    local df = 0
     leftoverTime = leftoverTime + dt
-    while leftoverTime > 1 / FRAME_RATE do
-      leftoverTime = leftoverTime - 1 / FRAME_RATE
-      df = df + 1
+    local df = math.floor(leftoverTime * FRAME_RATE)
+    if df > 1 then
+      df = df - 1
     end
+    leftoverTime = leftoverTime - df / FRAME_RATE
     -- Update everything for each frame that has passed
     network:update(dt)
     for f = 1, df do
@@ -225,8 +225,8 @@ function createClientAPI(client, isClientSide)
     connected = function() end,
     connectfailed = function(reason) end,
     disconnected = function(reason) end,
-    synced = function() end,
-    desynced = function() end,
+    stabilized = function() end,
+    destabilized = function() end,
 
     -- Functions to call
     isClientSide = function()
@@ -241,8 +241,8 @@ function createClientAPI(client, isClientSide)
     isConnected = function()
       return client:isConnected(0)
     end,
-    isSynced = function()
-      return client:isSynced()
+    isStable = function()
+      return client:isStable()
     end,
     getFramesOfLatency = function()
       return client:getFramesOfLatency()
@@ -274,11 +274,11 @@ function createClientAPI(client, isClientSide)
     api.clientId = client.clientId
     api.data = client.data
   end)
-  client:onSync(function()
-    api.synced()
+  client:onStabilize(function()
+    api.stabilized()
   end)
-  client:onDesync(function()
-    api.desynced()
+  client:onDestabilize(function()
+    api.destabilized()
   end)
 
   -- Override client methods

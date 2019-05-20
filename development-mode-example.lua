@@ -1,8 +1,8 @@
 -- This is a demo of simulsim's development functionality, which lets you
 -- simulate a multiplayer game with multiple clients on one computer
 
--- Load simulsim as a dependency (you should use a url for a specific commit)
-local simulsim = require 'https://raw.githubusercontent.com/bridgs/simulsim/master/simulsim.lua'
+-- Load simulsim as a dependency (you should use a GitHub url for a specific commit)
+local simulsim = require 'simulsim'
 
 -- Create the exact same game as seen in simple.lua
 local game = simulsim.defineGame()
@@ -26,7 +26,7 @@ function game.handleEvent(self, type, data)
       color = data.color
     })
   elseif type == 'despawn-player' then
-    self:despawnEntity(self:getEntityWhere({ clientId = data.clientid }))
+    self:despawnEntity(self:getEntityWhere({ clientId = data.clientId }))
   end
 end
 
@@ -60,7 +60,8 @@ for clientIndex, client in ipairs(network.clients) do
   function client.load()
     client.simulateNetworkConditions({
       latency = 250,
-      latencyDeviation = 0,
+      latencyDeviation = 50,
+      latencySpikeChance = 0.00,
       packetLossChance = 0.00
     })
   end
@@ -84,17 +85,39 @@ for clientIndex, client in ipairs(network.clients) do
     end
   end
 
+  -- Press the X key to disconnect the left player or the minus key to disconnect the right player
+  function client.keypressed(key)
+    if isLeftPlayer and key == 'x' then
+      client.disconnect()
+    elseif not isLeftPlayer and key == '-' then
+      client.disconnect()
+    end
+  end
+
   -- Draw both clients' games to the screen at once!
   function client.draw()
     -- Offset the drawn elements so that you can see both screens side-by-side
-    local xOffset = isLeftPlayer and 0 or 410
+    local x, y = isLeftPlayer and 10 or 420, 10
     -- Clear the screen
     love.graphics.setColor(0.1, 0.1, 0.1)
-    love.graphics.rectangle('fill', xOffset, 0, 400, 400)
+    love.graphics.rectangle('fill', x, y, 400, 400)
     -- Draw each entity
-    for _, entity in ipairs(client.game.entities) do
-      love.graphics.setColor(entity.color)
-      love.graphics.rectangle('fill', xOffset + entity.x, entity.y, entity.width, entity.height)
+    if client.isConnected() then
+      for _, entity in ipairs(client.game.entities) do
+        love.graphics.setColor(entity.color)
+        love.graphics.rectangle('fill', x + entity.x, y + entity.y, entity.width, entity.height)
+      end
+    end
+    -- Draw the client's network status
+    love.graphics.setColor(1, 1, 1)
+    if client.isConnecting() then
+      love.graphics.print('Connecting...', x + 3, y + 3)
+    elseif not client.isConnected() then
+      love.graphics.print('Disconnected! :(', x + 3, y + 3)
+    elseif not client.isStable() then
+      love.graphics.print('Connected! Stabilizing...', x + 3, y + 3)
+    else
+      love.graphics.print('Connected! Frames of latency: ' .. client.getFramesOfLatency(), x + 3, y + 3)
     end
   end
 end

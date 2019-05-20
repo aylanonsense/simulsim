@@ -1,8 +1,8 @@
 -- These are the client/server callbacks that simulsim defines
 -- If you run this you should see the client connecting to the server in the developer console
 
--- Load simulsim as a dependency (you should use a url for a specific commit)
-local simulsim = require 'https://raw.githubusercontent.com/bridgs/simulsim/master/simulsim.lua'
+-- Load simulsim as a dependency (you should use a GitHub url for a specific commit)
+local simulsim = require 'simulsim'
 
 -- Define a trivially boring game (nothing happens)
 local game = simulsim.defineGame()
@@ -52,11 +52,11 @@ end
 function client.disconnected(reason)
   print('client.disconnected reason="' .. reason .. '"')
 end
--- Called whenever the client starts to feel it has a good read on the latency
-function client.synced()
-  print('client.synced')
+-- Called whenever the client starts to feel it has a good read on the latency and connection status
+function client.stabilized()
+  print('client.stabilized')
 end
--- Called whenever the client gets desynchronized from the server and needs to reevaluate latency
-function client.desynced()
-  print('client.desynced')
+-- Called whenever the client begins to feel uncertain about latency and connection status
+function client.destabilized()
+  print('client.destabilized')
 end

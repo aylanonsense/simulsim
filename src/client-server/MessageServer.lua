@@ -94,6 +94,7 @@ function MessageServer:new(params)
       if not self._connections[connId] then
         self._connections[connId] = {
           status = 'connecting',
+          connectAcceptData = nil,
           heldMessages = {},
           bufferedMessages = {}
         }
@@ -104,7 +105,8 @@ function MessageServer:new(params)
         -- Accept the client's request to connect
         local accept = function(data)
           conn.status = 'connected'
-          self._listener:send(connId, { 'connect-accept', data })
+          self._connections[connId].connectAcceptData = data
+          self._listener:send(connId, { 'connect-accept', self._connections[connId].connectAcceptData })
           -- Trigger connect callbacks
           for _, callback in ipairs(self._connectCallbacks) do
             callback(connId, data)
@@ -135,6 +137,9 @@ function MessageServer:new(params)
         else
           reject('Server not running')
         end
+      -- The client didn't get the memo that they're already connected
+      elseif conn.status == 'connected' and messageType == 'connect-request' then
+        self._listener:send(connId, { 'connect-accept', self._connections[connId].connectAcceptData })
       -- The client is disconnecting
       elseif conn.status ~= 'disconnected' and messageType == 'disconnect-request' then
         local prevStatus = conn.status

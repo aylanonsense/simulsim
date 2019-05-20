@@ -18,6 +18,7 @@ function Game:new(params)
     entities = {},
     data = {},
     inputs = {},
+    frameOfLastInput = {},
     events = {},
 
     -- Public methods
@@ -27,7 +28,8 @@ function Game:new(params)
         frame = self.frame,
         entities = {},
         data = tableUtils.cloneTable(self.data),
-        inputs = tableUtils.cloneTable(self.inputs)
+        inputs = tableUtils.cloneTable(self.inputs),
+        frameOfLastInput = tableUtils.cloneTable(self.frameOfLastInput)
       }
       for _, entity in ipairs(self.entities) do
         table.insert(state.entities, tableUtils.cloneTable(self:serializeEntity(entity)))
@@ -48,6 +50,9 @@ function Game:new(params)
       end
       if state.inputs then
         self.inputs = tableUtils.cloneTable(state.inputs)
+      end
+      if state.frameOfLastInput then
+        self.frameOfLastInput = tableUtils.cloneTable(state.frameOfLastInput)
       end
     end,
     -- Creates another game identical to this one
@@ -177,6 +182,7 @@ function Game:new(params)
       self.entities = {}
       self.data = {}
       self.inputs = {}
+      self.frameOfLastInput = {}
       self.events = {}
     end,
     resetEntityIdGeneration = function(self, prefix)

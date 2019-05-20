@@ -1,16 +1,22 @@
 local Game = require 'src/game/Game'
 local createGameNetwork = require 'src/network/createGameNetwork'
 local createPublicAPI = require 'src/api/createPublicAPI'
+local logger = require 'src/utils/logger'
 
-function defineGame(params)
+local function defineGame(params)
   return Game:define(params)
 end
 
-function createGameNetwork2(gameDefinition, params)
+local function createGameNetworkAPI(gameDefinition, params)
   return createPublicAPI(createGameNetwork(gameDefinition, params))
+end
+
+local function setLogLevel(lvl)
+  logger.setLogLevel(lvl)
 end
 
 return {
   defineGame = defineGame,
-  createGameNetwork = createGameNetwork2
+  createGameNetwork = createGameNetworkAPI,
+  setLogLevel = setLogLevel
 }

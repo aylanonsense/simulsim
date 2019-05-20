@@ -13,7 +13,7 @@ function EmptyGameClient:new()
     disconnect = function(self, reason) end,
     isConnecting = function(self) end,
     isConnected = function(self) end,
-    isSynced = function(self) end,
+    isStable = function(self) end,
     getFramesOfLatency = function(self) end,
     fireEvent = function(self, eventType, eventData, params) end,
     setInputs = function(self, inputs, params) end,
@@ -32,8 +32,8 @@ function EmptyGameClient:new()
     onConnect = function(self, callback) end,
     onConnectFailure = function(self, callback) end,
     onDisconnect = function(self, callback) end,
-    onSync = function(self, callback) end,
-    onDesync = function(self, callback) end
+    onStabilize = function(self, callback) end,
+    onDestabilize = function(self, callback) end
   }
 end
 

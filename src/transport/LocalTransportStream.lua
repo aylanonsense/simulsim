@@ -3,7 +3,7 @@ function LocalTransportStream:new(params)
   params = params or {}
   local latency = params.latency or 1
   local latencyDeviation = params.latencyDeviation or 0
-  local packetLossChance = params.packetLossChance or 0
+  local packetLossChance = params.packetLossChance or 0.00
 
   return {
     -- Private vars
@@ -12,10 +12,14 @@ function LocalTransportStream:new(params)
     _latency = latency,
     _latencyDeviation = latencyDeviation,
     _packetLossChance = packetLossChance,
+    _isInLatencySpike = false,
 
     -- Public methods
     send = function(self, msg, unlosable)
       local timeUntilReceive = (self._latency + self._latencyDeviation * (2 * math.random() - 1)) / 1000
+      if self._isInLatencySpike then
+        timeUntilReceive = math.min(math.max(timeUntilReceive + 0.2, 2 * timeUntilReceive), timeUntilReceive + 0.8)
+      end
       -- Receive the message immediately
       if timeUntilReceive <= 0 then
         self:_handleReceive(msg, unlosable)
@@ -51,9 +55,18 @@ function LocalTransportStream:new(params)
       if params.latencyDeviation then
         self._latencyDeviation = params.latencyDeviation
       end
+      if params.latencySpikeChance then
+        self._latencySpikeChance = params.latencySpikeChance
+      end
       if params.packetLossChance then
         self._packetLossChance = params.packetLossChance
       end
+    end,
+    startLatencySpike = function(self)
+      self._isInLatencySpike = true
+    end,
+    stopLatencySpike = function(self)
+      self._isInLatencySpike = false
     end,
 
     -- Callback methods

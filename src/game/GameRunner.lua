@@ -29,6 +29,7 @@ function GameRunner:new(params)
     applyEvent = function(self, event, params)
       params = params or {}
       local preserveFrame = params.preserveFrame
+      local preservedFrameAdjustment = params.preservedFrameAdjustment or 0
       local framesUntilAutoUnapply = params.framesUntilAutoUnapply
       -- If the event occurred too far in the past, there's not much we can do about it
       local maxAllowedAge = self.framesOfHistory
@@ -57,7 +58,7 @@ function GameRunner:new(params)
             end
             if self._eventHistory[i].preserveFrame then
               record.event = tableUtils.cloneTable(record.event)
-              record.event.frame = self._eventHistory[i].event.frame
+              record.event.frame = self._eventHistory[i].event.frame + preservedFrameAdjustment
             end
             self._eventHistory[i] = record
             replacedEvent = true
@@ -253,6 +254,7 @@ function GameRunner:new(params)
       for _, event in ipairs(events) do
         if event.isInputEvent and event.type == 'set-inputs' then
           self.game.inputs[event.data.clientId] = event.data.inputs
+          self.game.frameOfLastInput[event.data.clientId] = event.frame
         else
           table.insert(nonInputEvents, event)
           self.game:resetEntityIdGeneration('event-' .. event.id .. '-')

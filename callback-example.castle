@@ -1,5 +1,5 @@
 ---
-main: callbacks.lua
+main: callback-example.lua
 name: Simulsim Example - Callbacks
 description: The client and server callbacks that simulsim defines
 username: bridgs

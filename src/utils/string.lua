@@ -21,7 +21,6 @@ local function generateRandomString(len)
   return s
 end
 
-
 -- Stringifies any value
 function stringify(value, isExpanded, indent)
   indent = indent or 0
