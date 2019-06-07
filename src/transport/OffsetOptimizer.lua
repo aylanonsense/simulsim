@@ -1,4 +1,5 @@
 local OffsetOptimizer = {}
+
 function OffsetOptimizer:new(params)
   params = params or {}
   local numFramesOfHistory = params.numFramesOfHistory or 180
@@ -10,7 +11,7 @@ function OffsetOptimizer:new(params)
   local numSmallestRecordsToIgnore = numSmallestRecordsToIgnore or 5
   local numLargestRecordsToIgnore = numLargestRecordsToIgnore or 5
 
-  local optimizer = {
+  return {
     -- Private vars
     _records = {},
     _numFramesOfHistory = numFramesOfHistory,
@@ -84,8 +85,6 @@ function OffsetOptimizer:new(params)
       end
     end
   }
-
-  return optimizer
 end
 
 return OffsetOptimizer

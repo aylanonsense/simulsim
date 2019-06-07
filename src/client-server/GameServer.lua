@@ -5,6 +5,7 @@ local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
 
 local ServerSideGameClient = {}
+
 function ServerSideGameClient:new(params)
   params = params or {}
   local server = params.server

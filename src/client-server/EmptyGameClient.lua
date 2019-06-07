@@ -1,4 +1,5 @@
 local EmptyGameClient = {}
+
 function EmptyGameClient:new()
   return {
     -- Public vars

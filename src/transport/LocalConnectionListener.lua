@@ -1,4 +1,5 @@
 local LocalConnectionListener = {}
+
 function LocalConnectionListener:new()
   return {
     -- Private vars

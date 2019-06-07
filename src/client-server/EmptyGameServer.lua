@@ -1,4 +1,5 @@
 local EmptyGameServer = {}
+
 function EmptyGameServer:new(params)
   return {
     -- Public vars

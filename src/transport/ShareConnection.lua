@@ -3,6 +3,7 @@ local share = require 'src/lib/share'
 
 --- Creates a new client-side connection that's able to connect to a server
 local ShareConnection = {}
+
 function ShareConnection:new(params)
   params = params or {}
   local isLocalhost = params.isLocalhost ~= false

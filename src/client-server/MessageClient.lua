@@ -1,4 +1,5 @@
 local MessageClient = {}
+
 function MessageClient:new(params)
   params = params or {}
   local conn = params.conn

@@ -1,4 +1,5 @@
 local LocalTransportStream = {}
+
 function LocalTransportStream:new(params)
   params = params or {}
   local latency = params.latency or 1

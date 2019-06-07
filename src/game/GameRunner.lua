@@ -2,6 +2,7 @@ local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
 
 local GameRunner = {}
+
 function GameRunner:new(params)
   params = params or {}
   local game = params.game

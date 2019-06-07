@@ -3,6 +3,7 @@ local share = require 'src/lib/share'
 
 --- Creates a new server-side connection listener that can have multiple client-side connections connect to it
 local ShareConnectionListener = {}
+
 function ShareConnectionListener:new(params)
   params = params or {}
   local isLocalhost = params.isLocalhost ~= false

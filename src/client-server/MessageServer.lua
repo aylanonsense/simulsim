@@ -1,4 +1,5 @@
 local MessageServer = {}
+
 function MessageServer:new(params)
   params = params or {}
   local listener = params.listener

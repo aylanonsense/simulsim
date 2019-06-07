@@ -7,6 +7,7 @@ local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
 
 local GameClient = {}
+
 function GameClient:new(params)
   params = params or {}
   local conn = params.conn

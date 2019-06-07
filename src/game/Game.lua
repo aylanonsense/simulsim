@@ -1,6 +1,7 @@
 local tableUtils = require 'src/utils/table'
 
 local Game = {}
+
 function Game:new(params)
   params = params or {}
   local initialState = params.initialState
@@ -16,7 +17,6 @@ function Game:new(params)
     data = {},
     inputs = {},
     frameOfLastInput = {},
-    events = {},
 
     -- Public methods
     -- Gets the current state of the game as a simple table
@@ -60,7 +60,6 @@ function Game:new(params)
       for k, v in pairs(self) do
         clonedGame[k] = v
       end
-      clonedGame.events = tableUtils.cloneTable(self.events)
       -- Set the new game's state
       clonedGame:setState(self:getState())
       -- Return the newly-cloned game
@@ -180,7 +179,6 @@ function Game:new(params)
       self.data = {}
       self.inputs = {}
       self.frameOfLastInput = {}
-      self.events = {}
     end,
     resetEntityIdGeneration = function(self, prefix)
       self._entityIdPrefix = prefix or ''

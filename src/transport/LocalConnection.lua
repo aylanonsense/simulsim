@@ -1,6 +1,7 @@
 local logger = require 'src/utils/logger'
 
 local LocalConnection = {}
+
 function LocalConnection:new(params)
   params = params or {}
   local isClient = params.isClient or false
