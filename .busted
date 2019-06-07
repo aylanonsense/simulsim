@@ -1,6 +1,0 @@
-return {
-  default = {
-    coverage = true,
-    pattern = '.lua'
-  }
-}
