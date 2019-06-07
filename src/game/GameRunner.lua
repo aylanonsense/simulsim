@@ -10,7 +10,7 @@ function GameRunner:new(params)
   local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 5
   local isRenderable = params.isRenderable ~= false
 
-  return {
+  local runner = {
     -- Private vars
     _futureStates = {},
     _stateHistory = {},
@@ -159,6 +159,8 @@ function GameRunner:new(params)
       self._stateHistory = {}
       self._eventHistory = {}
       self._transformHistory = {}
+      -- Re-trigger the game's load function
+      self.game:load()
     end,
     rewind = function(self, numFrames)
       if self:_rewindToFrame(self.game.frame - numFrames) then
@@ -336,6 +338,11 @@ function GameRunner:new(params)
       end
     end
   }
+
+  -- Load the game
+  game:load()
+
+  return runner
 end
 
 return GameRunner

@@ -251,6 +251,7 @@ function Game:new(params)
     end,
 
     -- Methods to override
+    load = function(self) end,
     update = function(self, dt, isRenderable) end,
     handleEvent = function(self, eventType, eventData, isRenderable) end
   }

@@ -7,6 +7,11 @@ local simulsim = require 'simulsim'
 -- Define a new game
 local game = simulsim.defineGame()
 
+-- When the game is first loaded, set the background color
+function game.load(self)
+  self.data.backgroundColor = { 0.1, 0.1, 0.1 }
+end
+
 -- Update the game's state every frame by moving each entity
 function game.update(self, dt)
   for _, entity in ipairs(self.entities) do
@@ -19,20 +24,20 @@ function game.update(self, dt)
 end
 
 -- Handle events that the server and client fire, which may end up changing the game state
-function game.handleEvent(self, type, data)
+function game.handleEvent(self, eventType, eventData)
   -- Spawn a new player entity for a client
-  if type == 'spawn-player' then
+  if eventType == 'spawn-player' then
     self:spawnEntity({
-      clientId = data.clientId,
-      x = data.x,
-      y = data.y,
+      clientId = eventData.clientId,
+      x = eventData.x,
+      y = eventData.y,
       width = 20,
       height = 20,
-      color = data.color
+      color = eventData.color
     })
   -- Despawn a player
-  elseif type == 'despawn-player' then
-    self:despawnEntity(self:getEntityWhere({ clientId = data.clientId }))
+  elseif eventType == 'despawn-player' then
+    self:despawnEntity(self:getEntityWhere({ clientId = eventData.clientId }))
   end
 end
 
@@ -67,7 +72,7 @@ end
 -- Draw the game for each client
 function client.draw()
   -- Clear the screen
-  love.graphics.setColor(0.1, 0.1, 0.1)
+  love.graphics.setColor(client.game.data.backgroundColor)
   love.graphics.rectangle('fill', 0, 0, 400, 400)
   -- Draw each entity
   for _, entity in ipairs(client.game.entities) do
