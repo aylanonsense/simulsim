@@ -34,92 +34,21 @@ local LOVE_METHODS = {
   joystickremoved = { client = true }
 }
 
-function createPublicAPI(network)
-  -- Create client APIs
-  local clientAPIs = {}
-  for _, client in ipairs(network.clients) do
-    table.insert(clientAPIs, createClientAPI(client, network:isClientSide()))
-  end
+local function createServerSideClientAPI(client)
+  return {
+    clientId = client.clientId,
+    data = client.data,
 
-  -- Create server API
-  local serverAPI = createServerAPI(network.server, network:isServerSide())
-
-  -- Bind events
-  for cbName, where in pairs(LOVE_METHODS) do
-    local cb = love[cbName]
-    love[cbName] = function(...)
-      if where.server and network:isServerSide() then
-        local serverCb = serverAPI[cbName]
-        if serverCb then
-          serverCb(...)
-        end
-      end
-      if where.client and network:isClientSide() then
-        for _, clientAPI in ipairs(clientAPIs) do
-          local clientCb = clientAPI[cbName]
-          if clientCb then
-            clientCb(...)
-          end
-        end
-      end
-      if cb then
-        cb(...)
-      end
+    disconnect = function(reason)
+      client:disconnect(reason)
+    end,
+    isConnected = function()
+      return client:isConnected()
     end
-  end
-
-  -- Bind update event
-  local leftoverTime = 1 / (2 * FRAME_RATE)
-  local cb = love.update
-  love.update = function(dt, ...)
-    if cb then
-      cb(dt, ...)
-    end
-    -- Figure out how many frames have passed
-    leftoverTime = leftoverTime + dt
-    local df = math.floor(leftoverTime * FRAME_RATE)
-    if df > 1 then
-      df = df - 1
-    end
-    leftoverTime = leftoverTime - df / FRAME_RATE
-    -- Update everything for each frame that has passed
-    network:update(dt)
-    for f = 1, df do
-      network:moveForwardOneFrame(1 / FRAME_RATE)
-      if network:isServerSide() then
-        if serverAPI.update then
-          serverAPI.update(1 / FRAME_RATE)
-        end
-      end
-      if network:isClientSide() then
-        for _, clientAPI in ipairs(clientAPIs) do
-          if clientAPI.update then
-            clientAPI.update(1 / FRAME_RATE)
-          end
-        end
-      end
-    end
-  end
-
-  -- Start the server
-  network.server:startListening()
-
-  -- Connect the clients to the server
-  for _, client in ipairs(network.clients) do
-    client:connect()
-  end
-
-  local networkAPI = {
-    server = serverAPI,
-    client = clientAPIs[1],
-    clients = clientAPIs
   }
-
-  -- Return APIs
-  return networkAPI, serverAPI, clientAPIs[1], clientAPIs
 end
 
-function createServerAPI(server, isServerSide)
+local function createServerAPI(server, isServerSide)
   local clients = {}
 
   local api = {
@@ -197,21 +126,7 @@ function createServerAPI(server, isServerSide)
   return api
 end
 
-function createServerSideClientAPI(client)
-  return {
-    clientId = client.clientId,
-    data = client.data,
-
-    disconnect = function(reason)
-      client:disconnect(reason)
-    end,
-    isConnected = function()
-      return client:isConnected()
-    end
-  }
-end
-
-function createClientAPI(client, isClientSide)
+local function createClientAPI(client, isClientSide)
   local api
   api = {
     _client = client,
@@ -294,6 +209,91 @@ function createClientAPI(client, isClientSide)
   end
 
   return api
+end
+
+local function createPublicAPI(network)
+  -- Create client APIs
+  local clientAPIs = {}
+  for _, client in ipairs(network.clients) do
+    table.insert(clientAPIs, createClientAPI(client, network:isClientSide()))
+  end
+
+  -- Create server API
+  local serverAPI = createServerAPI(network.server, network:isServerSide())
+
+  -- Bind events
+  for cbName, where in pairs(LOVE_METHODS) do
+    local cb = love[cbName]
+    love[cbName] = function(...)
+      if where.server and network:isServerSide() then
+        local serverCb = serverAPI[cbName]
+        if serverCb then
+          serverCb(...)
+        end
+      end
+      if where.client and network:isClientSide() then
+        for _, clientAPI in ipairs(clientAPIs) do
+          local clientCb = clientAPI[cbName]
+          if clientCb then
+            clientCb(...)
+          end
+        end
+      end
+      if cb then
+        cb(...)
+      end
+    end
+  end
+
+  -- Bind update event
+  local leftoverTime = 1 / (2 * FRAME_RATE)
+  local cb = love.update
+  love.update = function(dt, ...)
+    if cb then
+      cb(dt, ...)
+    end
+    -- Figure out how many frames have passed
+    leftoverTime = leftoverTime + dt
+    local df = math.floor(leftoverTime * FRAME_RATE)
+    if df > 1 then
+      df = df - 1
+    end
+    leftoverTime = leftoverTime - df / FRAME_RATE
+    -- Update everything for each frame that has passed
+    network:update(dt)
+    for f = 1, df do
+      network:moveForwardOneFrame(1 / FRAME_RATE)
+      if network:isServerSide() then
+        if serverAPI.update then
+          serverAPI.update(1 / FRAME_RATE)
+        end
+      end
+      if network:isClientSide() then
+        for _, clientAPI in ipairs(clientAPIs) do
+          if clientAPI.update then
+            clientAPI.update(1 / FRAME_RATE)
+          end
+        end
+      end
+    end
+  end
+
+  -- Start the server
+  network.server:startListening()
+
+  -- Connect the clients to the server
+  for _, client in ipairs(network.clients) do
+    client:connect()
+  end
+
+  local networkAPI = {
+    server = serverAPI,
+    client = clientAPIs[1],
+    clients = clientAPIs
+  }
+
+  -- Return APIs
+  return networkAPI, serverAPI, clientAPIs[1], clientAPIs
 end
 
 return createPublicAPI

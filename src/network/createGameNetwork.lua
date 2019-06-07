@@ -9,31 +9,7 @@ local GameClient = require 'src/client-server/GameClient'
 local EmptyGameServer = require 'src/client-server/EmptyGameServer'
 local EmptyGameClient = require 'src/client-server/EmptyGameClient'
 
-function createNetwork(gameDefinition, params)
-  params = params or {}
-  local mode = params.mode or 'development'
-
-  -- Create an in-memory network, which allows for neat things like simulating network conditions
-  if mode == 'development' then
-    return createInMemoryNetwork(gameDefinition, params)
-  -- Create a localhost network using share.lua, though others won't be able to join
-  elseif mode == 'localhost' then
-    USE_CASTLE_CONFIG = false
-    return createLocalhostShareNetwork(gameDefinition, params)
-  -- Create a fully multiplayer network using share.lua which will require a dedicated server
-  elseif mode == 'multiplayer' then
-    USE_CASTLE_CONFIG = true
-    -- We're on the server, so just create a server network
-    if CASTLE_SERVER then
-      return createServerSideShareNetwork(gameDefinition, params)
-    -- We're on the client, so just create a client network
-    else
-      return createClientSideShareNetwork(gameDefinition, params)
-    end
-  end
-end
-
-function createInMemoryNetwork(gameDefinition, params)
+local function createInMemoryNetwork(gameDefinition, params)
   params = params or {}
   local numClients = params.numClients or 1
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
@@ -119,7 +95,7 @@ function createInMemoryNetwork(gameDefinition, params)
   }
 end
 
-function createLocalhostShareNetwork(gameDefinition, params)
+local function createLocalhostShareNetwork(gameDefinition, params)
   params = params or {}
   local port = params.port
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
@@ -171,7 +147,7 @@ function createLocalhostShareNetwork(gameDefinition, params)
   }
 end
 
-function createServerSideShareNetwork(gameDefinition, params)
+local function createServerSideShareNetwork(gameDefinition, params)
   params = params or {}
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
@@ -212,7 +188,7 @@ function createServerSideShareNetwork(gameDefinition, params)
   }
 end
 
-function createClientSideShareNetwork(gameDefinition, params)
+local function createClientSideShareNetwork(gameDefinition, params)
   params = params or {}
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
@@ -250,6 +226,30 @@ function createClientSideShareNetwork(gameDefinition, params)
       return true
     end
   }
+end
+
+local function createNetwork(gameDefinition, params)
+  params = params or {}
+  local mode = params.mode or 'development'
+
+  -- Create an in-memory network, which allows for neat things like simulating network conditions
+  if mode == 'development' then
+    return createInMemoryNetwork(gameDefinition, params)
+  -- Create a localhost network using share.lua, though others won't be able to join
+  elseif mode == 'localhost' then
+    USE_CASTLE_CONFIG = false
+    return createLocalhostShareNetwork(gameDefinition, params)
+  -- Create a fully multiplayer network using share.lua which will require a dedicated server
+  elseif mode == 'multiplayer' then
+    USE_CASTLE_CONFIG = true
+    -- We're on the server, so just create a server network
+    if CASTLE_SERVER then
+      return createServerSideShareNetwork(gameDefinition, params)
+    -- We're on the client, so just create a client network
+    else
+      return createClientSideShareNetwork(gameDefinition, params)
+    end
+  end
 end
 
 return createNetwork

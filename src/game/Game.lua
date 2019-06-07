@@ -1,8 +1,5 @@
 local tableUtils = require 'src/utils/table'
 
--- Useful no-op method
-function noop() end
-
 local Game = {}
 function Game:new(params)
   params = params or {}

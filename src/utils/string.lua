@@ -22,7 +22,7 @@ local function generateRandomString(len)
 end
 
 -- Stringifies any value
-function stringify(value, isExpanded, indent)
+local function stringify(value, isExpanded, indent)
   indent = indent or 0
   local t = type(value)
   if t == 'boolean' then
