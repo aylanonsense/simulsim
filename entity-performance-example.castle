@@ -1,0 +1,10 @@
+---
+main: entity-performance-example.lua
+name: Simulsim Example - Entity Performance
+description: This is a performance test to see how many entities simulsim can handle at once.
+username: bridgs
+primaryColor: C0C0C0
+multiplayer:
+    - enabled: true
+dimensions: 400x400
+scaling: on
