@@ -19,7 +19,7 @@ function game.update(self, dt)
   end
 end
 function game.handleEvent(self, eventType, eventData)
-  if eventType == 'spawn-critter' then
+  if eventType == 'spawn-box' then
     self:spawnEntity({
       x = eventData.x,
       y = eventData.y,
@@ -35,8 +35,8 @@ end
 local network, server, client = simulsim.createGameNetwork(game, { mode = 'development' })
 
 function server.load()
-  for i = 1, 1200 do
-    server.fireEvent('spawn-critter', {
+  for i = 1, 1850 do
+    server.fireEvent('spawn-box', {
       x = math.random(0, 380),
       y = math.random(0, 380),
       vx = math.random(-100, 100),

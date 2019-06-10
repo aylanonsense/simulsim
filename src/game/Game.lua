@@ -10,6 +10,7 @@ function Game:new(params)
     -- Private vars
     _entityIdPrefix = '',
     _nextEntityId = 1,
+    _entityIndex = {},
 
     -- Public vars
     frame = 0,
@@ -37,9 +38,12 @@ function Game:new(params)
     setState = function(self, state)
       self.frame = state.frame or self.frame
       if state.entities then
+        self._entityIndex = {}
         self.entities = {}
         for _, entityState in ipairs(state.entities) do
-          table.insert(self.entities, self:deserializeEntity(tableUtils.cloneTable(entityState)))
+          local entity = self:deserializeEntity(tableUtils.cloneTable(entityState))
+          self._entityIndex[self:getEntityId(entity)] = entity
+          table.insert(self.entities, entity)
         end
       end
       if state.data then
@@ -70,11 +74,12 @@ function Game:new(params)
     end,
     -- Gets an entity with the given id
     getEntityById = function(self, entityId)
-      for index, entity in ipairs(self.entities) do
-        if self:getEntityId(entity) == entityId then
-          return entity, index
-        end
-      end
+      return self._entityIndex[entityId]
+      -- for index, entity in ipairs(self.entities) do
+      --   if self:getEntityId(entity) == entityId then
+      --     return entity, index
+      --   end
+      -- end
     end,
     getEntityWhere = function(self, criteria)
       for index, entity in ipairs(self.entities) do
@@ -157,6 +162,7 @@ function Game:new(params)
         self:setEntityId(entity, self:generateEntityId())
       end
       -- Add the entity to the game
+      self._entityIndex[self:getEntityId(entity)] = entity
       table.insert(self.entities, entity)
       return entity
     end,
@@ -164,6 +170,7 @@ function Game:new(params)
     despawnEntity = function(self, entity)
       if entity then
         local id = self:getEntityId(entity)
+        self._entityIndex[id] = nil
         for i = #self.entities, 1, -1 do
           if self:getEntityId(self.entities[i]) == id then
             table.remove(self.entities, i)
@@ -175,6 +182,7 @@ function Game:new(params)
     reset = function(self)
       self:resetEntityIdGeneration()
       self.frame = 0
+      self._entityIndex = {}
       self.entities = {}
       self.data = {}
       self.inputs = {}
@@ -243,6 +251,22 @@ function Game:new(params)
           end
         end
       end
+    end,
+    reindexEntity = function(self, entity)
+      self._entityIndex[self:getEntityId(entity)] = entity
+    end,
+    reindexEntities = function(self, index)
+      if index then
+        self._entityIndex = index
+      else
+        self._entityIndex = {}
+        for _, entity in ipairs(self.entities) do
+          self:reindexEntity(entity)
+        end
+      end
+    end,
+    unindexEntityId = function(self, entityId)
+      self._entityIndex[entityId] = nil
     end,
 
     -- Methods to override

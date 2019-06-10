@@ -442,12 +442,14 @@ function GameClient:new(params)
       self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata)
     end,
     _syncToTargetGame = function(self, sourceGame, targetGame, isPrediction)
+      local entityIndex = {}
+      local entities = {}
       -- Sync entities that exist in the target game
       local entityExistsInTargetGame = {}
       for _, targetEntity in ipairs(targetGame.entities) do
         local id = targetGame:getEntityId(targetEntity)
         entityExistsInTargetGame[id] = true
-        local sourceEntity, index = sourceGame:getEntityById(id)
+        local sourceEntity = sourceGame:getEntityById(id)
         local isSyncEnabled
         if sourceEntity then
           isSyncEnabled = sourceGame:isSyncEnabledForEntity(sourceEntity) and targetGame:isSyncEnabledForEntity(targetEntity)
@@ -456,33 +458,26 @@ function GameClient:new(params)
         end
         if isSyncEnabled then
           local syncedEntity = self:syncEntity(sourceGame, sourceEntity, targetEntity, isPrediction)
-          -- Entity was removed
-          if not syncedEntity and sourceEntity then
-            table.remove(sourceGame.entities, index)
-          -- Entity was added
-          elseif syncedEntity and not sourceEntity then
-            table.insert(sourceGame.entities, syncedEntity)
-          -- Entity was modified or swapped out
-          elseif syncedEntity and sourceEntity then
-            sourceGame.entities[index] = syncedEntity
+          if syncedEntity then
+            entityIndex[id] = syncedEntity
+            table.insert(entities, syncedEntity)
           end
         end
       end
       -- Sync entities that don't exist in the target game
-      for index = #sourceGame.entities, 1, -1 do
-        local sourceEntity = sourceGame.entities[index]
+      for _, sourceEntity in ipairs(sourceGame.entities) do
         local id = sourceGame:getEntityId(sourceEntity)
         if not entityExistsInTargetGame[id] and sourceGame:isSyncEnabledForEntity(sourceEntity) then
           local syncedEntity = self:syncEntity(sourceGame, sourceEntity, nil, isPrediction)
-          -- Entity was removed
-          if not syncedEntity then
-            table.remove(sourceGame.entities, index)
-          -- Entity was modified or swapped out
-          else
-            sourceGame.entities[index] = syncedEntity
+          if syncedEntity then
+            entityIndex[id] = syncedEntity
+            table.insert(entities, syncedEntity)
           end
         end
       end
+      -- Sync entities
+      sourceGame.entities = entities
+      sourceGame:reindexEntities(entityIndex)
       -- Sync data
       sourceGame.data = self:syncData(sourceGame, sourceGame.data, tableUtils.cloneTable(targetGame.data), isPrediction)
       -- Sync inputs
@@ -511,6 +506,8 @@ function GameClient:new(params)
       local isStable = self._hasSetInitialState and self._hasStabilizedTimeOffset and self._hasStabilizedLatency
       local sourceGame = self.game
       local targetGame = self.gameWithoutSmoothing:clone()
+      local entityIndex = {}
+      local entities = {}
       -- Just copy the current frame
       sourceGame.frame = targetGame.frame
       -- Smooth entities
@@ -518,27 +515,20 @@ function GameClient:new(params)
       for _, targetEntity in ipairs(targetGame.entities) do
         local id = targetGame:getEntityId(targetEntity)
         entityExistsInTargetGame[id] = true
-        local sourceEntity, index = sourceGame:getEntityById(id)
+        local sourceEntity = sourceGame:getEntityById(id)
         local smoothedEntity
         if isStable or not sourceEntity then
           smoothedEntity = self:smoothEntity(sourceGame, sourceEntity, targetEntity)
         else
           smoothedEntity = sourceEntity
         end
-        -- Entity was removed
-        if not smoothedEntity and sourceEntity then
-          table.remove(sourceGame.entities, index)
-        -- Entity was added
-        elseif smoothedEntity and not sourceEntity then
-          table.insert(sourceGame.entities, smoothedEntity)
-        -- Entity was modified or swapped out
-        elseif smoothedEntity and sourceEntity then
-          sourceGame.entities[index] = smoothedEntity
+        if smoothedEntity then
+          entityIndex[id] = smoothedEntity
+          table.insert(entities, smoothedEntity)
         end
       end
       -- Sync entities that don't exist in the target game
-      for index = #sourceGame.entities, 1, -1 do
-        local sourceEntity = sourceGame.entities[index]
+      for _, sourceEntity in ipairs(sourceGame.entities) do
         local id = sourceGame:getEntityId(sourceEntity)
         if not entityExistsInTargetGame[id] then
           local smoothedEntity
@@ -547,15 +537,15 @@ function GameClient:new(params)
           else
             smoothedEntity = sourceEntity
           end
-          -- Entity was removed
-          if not smoothedEntity then
-            table.remove(sourceGame.entities, index)
-          -- Entity was modified or swapped out
-          else
-            sourceGame.entities[index] = smoothedEntity
+          if smoothedEntity then
+            entityIndex[id] = smoothedEntity
+            table.insert(entities, smoothedEntity)
           end
         end
       end
+      -- Smooth entities
+      sourceGame.entities = entities
+      sourceGame:reindexEntities(entityIndex)
       -- Smooth inputs
       sourceGame.inputs = self:smoothInputs(sourceGame, sourceGame.inputs, targetGame.inputs)
       -- Smooth data
