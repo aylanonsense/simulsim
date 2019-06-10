@@ -32,7 +32,7 @@ function game.handleEvent(self, eventType, eventData)
   end
 end
 
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'development' })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer' })
 
 function server.load()
   for i = 1, 1150 do
