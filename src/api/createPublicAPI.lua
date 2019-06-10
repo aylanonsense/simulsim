@@ -245,13 +245,9 @@ local function createPublicAPI(network)
     end
   end
 
-  -- Bind update event
+  -- Define method to update the network
   local leftoverTime = 1 / (2 * FRAME_RATE)
-  local cb = love.update
-  love.update = function(dt, ...)
-    if cb then
-      cb(dt, ...)
-    end
+  local updateNetwork = function(dt)
     -- Figure out how many frames have passed
     leftoverTime = leftoverTime + dt
     local df = math.floor(leftoverTime * FRAME_RATE)
@@ -276,6 +272,25 @@ local function createPublicAPI(network)
         end
       end
     end
+  end
+
+  -- Bind update event
+  local updateCallback = love.update
+  love.update = function(dt, ...)
+    if updateCallback then
+      updateCallback(dt, ...)
+    end
+    updateNetwork(dt)
+  end
+
+  -- Bind background update event
+  local backgroundUpdateCallback = castle.backgroundupdate
+  castle.backgroundupdate = function(dt, ...)
+    if backgroundUpdateCallback then
+      backgroundUpdateCallback(dt, ...)
+    end
+    -- Update the network even in the background
+    updateNetwork(dt)
   end
 
   -- Start the server
