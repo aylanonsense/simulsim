@@ -32,10 +32,10 @@ function game.handleEvent(self, eventType, eventData)
   end
 end
 
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer' })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'development' })
 
 function server.load()
-  for i = 1, 1150 do
+  for i = 1, 1200 do
     server.fireEvent('spawn-critter', {
       x = math.random(0, 380),
       y = math.random(0, 380),

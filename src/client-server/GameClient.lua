@@ -15,6 +15,7 @@ function GameClient:new(params)
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
   local framesBetweenPings = params.framesBetweenPings or 15
   local maxFramesOfLatency = params.maxFramesOfLatency or 180
+  local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction == true
 
   -- Create a game for the client and a runner for it
   local runner = GameRunner:new({
@@ -26,10 +27,15 @@ function GameClient:new(params)
     game = gameDefinition:new(),
     isRenderable = false
   })
-  local runnerWithoutPrediction = GameRunner:new({
-    game = gameDefinition:new(),
-    isRenderable = false
-  })
+  local runnerWithoutPrediction
+  local gameWithoutPrediction
+  if exposeGameWithoutPrediction then
+    runnerWithoutPrediction = GameRunner:new({
+      game = gameDefinition:new(),
+      isRenderable = false
+    })
+    gameWithoutPrediction = runnerWithoutPrediction.game
+  end
 
   -- Create offset optimizers to minimize time desync and latency
   local timeSyncOptimizer = OffsetOptimizer:new({
@@ -49,6 +55,7 @@ function GameClient:new(params)
     _runner = runner,
     _runnerWithoutSmoothing = runnerWithoutSmoothing,
     _runnerWithoutPrediction = runnerWithoutPrediction,
+    _gameDefinition = gameDefinition,
     _clientFrame = 0,
     _hasSetInitialState = false,
     _hasStabilizedTimeOffset = false,
@@ -75,7 +82,7 @@ function GameClient:new(params)
     data = {},
     game = runner.game,
     gameWithoutSmoothing = runnerWithoutSmoothing.game,
-    gameWithoutPrediction = runnerWithoutPrediction.game,
+    gameWithoutPrediction = gameWithoutPrediction,
 
     -- Public methods
     connect = function(self, handshake)
@@ -119,9 +126,11 @@ function GameClient:new(params)
         -- Apply a prediction of the event
         if predictClientSide then
           local serverEvent = tableUtils.cloneTable(event)
-          self._runnerWithoutPrediction:applyEvent(serverEvent, {
-            framesUntilAutoUnapply = self._framesOfLatency + 5
-          })
+          if self._runnerWithoutPrediction then
+            self._runnerWithoutPrediction:applyEvent(serverEvent, {
+              framesUntilAutoUnapply = self._framesOfLatency + 5
+            })
+          end
           local clientEvent = tableUtils.cloneTable(event)
           clientEvent.frame = self.gameWithoutSmoothing.frame + 1
           self._runnerWithoutSmoothing:applyEvent(clientEvent, {
@@ -161,7 +170,9 @@ function GameClient:new(params)
       -- Update the game (via the game runner)
       self._runner:moveForwardOneFrame(dt)
       self._runnerWithoutSmoothing:moveForwardOneFrame(dt)
-      self._runnerWithoutPrediction:moveForwardOneFrame(dt)
+      if self._runnerWithoutPrediction then
+        self._runnerWithoutPrediction:moveForwardOneFrame(dt)
+      end
       if self._messageClient:isConnected() then
         local wasStable = self._hasSetInitialState and self._hasStabilizedTimeOffset and self._hasStabilizedLatency
         -- Update the timing and latency optimizers
@@ -199,18 +210,22 @@ function GameClient:new(params)
             -- Fast forward if we're behind the states the server is sending us
             if timeAdjustment > 0 then
               logger.debug('Client ' .. self.clientId .. ' fast forwarding ' .. timeAdjustment .. ' frames to sync time with server [frame=' .. self.game.frame .. ']')
-              local fastForward1Successful = self._runnerWithoutSmoothing:fastForward(timeAdjustment)
-              local fastForward2Successful = self._runnerWithoutPrediction:fastForward(timeAdjustment)
-              if not fastForward1Successful or not fastForward2Successful then
+              local fastForwardSuccessful = self._runnerWithoutSmoothing:fastForward(timeAdjustment)
+              if self._runnerWithoutPrediction then
+                fastForwardSuccessful = fastForwardSuccessful and self._runnerWithoutPrediction:fastForward(timeAdjustment)
+              end
+              if not fastForwardSuccessful then
                 logger.info('Client ' .. self.clientId .. ' destabilized due to failed fast forward [frame=' .. self.game.frame .. ']')
                 self:_handleDestabilize()
               end
             -- Rewind if we're ahead of the states the server is sending us
             elseif timeAdjustment < 0 then
               logger.debug('Client ' .. self.clientId .. ' rewinding ' .. timeAdjustment .. ' frames to sync time with server [frame=' .. self.game.frame .. ']')
-              local rewind1Successful = self._runnerWithoutSmoothing:rewind(-timeAdjustment)
-              local rewind2Successful = self._runnerWithoutPrediction:rewind(-timeAdjustment)
-              if not rewind1Successful or not rewind2Successful then
+              local rewindSuccessful = self._runnerWithoutSmoothing:rewind(-timeAdjustment)
+              if self._runnerWithoutPrediction then
+                rewindSuccessful = rewindSuccessful and self._runnerWithoutPrediction:rewind(-timeAdjustment)
+              end
+              if not rewindSuccessful then
                 logger.info('Client ' .. self.clientId .. ' destabilized due to failed rewind [frame=' .. self.game.frame .. ']')
                 self:_handleDestabilize()
               end
@@ -273,7 +288,9 @@ function GameClient:new(params)
       else
         self._runnerWithoutSmoothing.framesOfHistory = math.min(self._framesOfLatency + 10, 300)
       end
-      self._runnerWithoutPrediction.framesOfHistory = self._runnerWithoutSmoothing.framesOfHistory
+      if self._runnerWithoutPrediction then
+        self._runnerWithoutPrediction.framesOfHistory = self._runnerWithoutSmoothing.framesOfHistory
+      end
       -- Smooth game
       self:_smoothGame()
     end,
@@ -362,8 +379,10 @@ function GameClient:new(params)
       -- Set the state of the client-side game
       self._runnerWithoutSmoothing:reset()
       self._runnerWithoutSmoothing:setState(state)
-      self._runnerWithoutPrediction:reset()
-      self._runnerWithoutPrediction:setState(state)
+      if self._runnerWithoutPrediction then
+        self._runnerWithoutPrediction:reset()
+        self._runnerWithoutPrediction:setState(state)
+      end
     end,
     _handleDestabilize = function(self)
       self._hasSetInitialState = false
@@ -475,14 +494,16 @@ function GameClient:new(params)
       else
         self:_recordTimeOffset(state.frame)
         -- state represents what the game would currently look like with no client-side prediction
-        self._runnerWithoutPrediction:applyState(state)
+        if self._runnerWithoutPrediction then
+          self._runnerWithoutPrediction:applyState(state)
+        end
         -- Fix client-predicted inconsistencies in the past
         self._runnerWithoutSmoothing:applyStateTransform(state.frame - self._framesOfLatency, function(game)
-          self:_syncToTargetGame(self.gameWithoutSmoothing, gameDefinition:new({ initialState = state }), true)
+          self:_syncToTargetGame(self.gameWithoutSmoothing, self._gameDefinition:new({ initialState = state }), true)
         end)
         -- Fix non-predicted inconsistencies in the present
         self._runnerWithoutSmoothing:applyStateTransform(state.frame, function(game)
-          self:_syncToTargetGame(self.gameWithoutSmoothing, gameDefinition:new({ initialState = state }), false)
+          self:_syncToTargetGame(self.gameWithoutSmoothing, self._gameDefinition:new({ initialState = state }), false)
         end)
       end
     end,
@@ -544,14 +565,18 @@ function GameClient:new(params)
       if event.frame > self._runner.game.frame then
         self._runner:applyEvent(event, params)
       end
-      self._runnerWithoutPrediction:applyEvent(event, params)
+      if self._runnerWithoutPrediction then
+        self._runnerWithoutPrediction:applyEvent(event, params)
+      end
       return self._runnerWithoutSmoothing:applyEvent(event, params)
     end,
     _unapplyEvent = function(self, event)
       if event.frame > self._runner.game.frame then
         self._runner:unapplyEvent(event)
       end
-      self._runnerWithoutPrediction:unapplyEvent(event)
+      if self._runnerWithoutPrediction then
+        self._runnerWithoutPrediction:unapplyEvent(event)
+      end
       return self._runnerWithoutSmoothing:unapplyEvent(event)
     end,
     _ping = function(self)
