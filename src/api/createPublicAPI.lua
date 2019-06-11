@@ -239,10 +239,14 @@ local function createPublicAPI(network, params)
 
   -- Add callback methods onto the network API
   for methodName, where in pairs(LOVE_METHODS) do
+    local originalMethod = love[methodName]
     -- Add an update method onto the network API
     if methodName == 'update' then
       local leftoverTime = 1 / (2 * FRAME_RATE)
-      networkAPI.update = function(dt)
+      networkAPI.update = function(dt, ...)
+        if originalMethod then
+          originalMethod(dt, ...)
+        end
         -- Figure out how many frames have passed
         leftoverTime = leftoverTime + dt
         local df = math.floor(leftoverTime * FRAME_RATE)
@@ -271,6 +275,9 @@ local function createPublicAPI(network, params)
     -- Add a callback method onto the network API
     else
       networkAPI[methodName] = function(...)
+        if originalMethod then
+          originalMethod(...)
+        end
         if where.server and network:isServerSide() then
           if serverAPI[methodName] then
             serverAPI[methodName](...)
@@ -287,11 +294,7 @@ local function createPublicAPI(network, params)
     end
     -- Override the default LOVE method
     if overrideCallbackMethods then
-      local originalMethod = love[methodName]
       love[methodName] = function(...)
-        if originalMethod then
-          originalMethod(...)
-        end
         networkAPI[methodName](...)
       end
     end
@@ -299,11 +302,7 @@ local function createPublicAPI(network, params)
 
   -- Bind background update event (so simulsim can update even in the background)
   if overrideCallbackMethods then
-    local originalMethod = castle.backgroundupdate
     castle.backgroundupdate = function(...)
-      if originalMethod then
-        originalMethod(...)
-      end
       networkAPI.update(...)
     end
   end
