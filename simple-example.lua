@@ -16,8 +16,8 @@ end
 function game.update(self, dt)
   for _, entity in ipairs(self.entities) do
     local inputs = self:getInputsForClient(entity.clientId) or {}
-    local moveX = (inputs.right and 1 or 0) - (inputs.left and 1 or 0)
-    local moveY = (inputs.down and 1 or 0) - (inputs.up and 1 or 0)
+    local moveX = -((inputs.right and 1 or 0) - (inputs.left and 1 or 0))
+    local moveY = -((inputs.down and 1 or 0) - (inputs.up and 1 or 0))
     entity.x = math.min(math.max(0, entity.x + 200 * moveX * dt), 380)
     entity.y = math.min(math.max(0, entity.y + 200 * moveY * dt), 380)
   end
@@ -42,7 +42,23 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 -- Create a client-server network for the game to run on
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer' })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer', overrideCallbackMethods = false })
+
+function love.load()
+  network.load()
+end
+
+function love.update(dt)
+  network.update(dt)
+end
+
+function castle.backgroundupdate(dt)
+  network.update(dt)
+end
+
+function love.draw()
+  network.draw()
+end
 
 -- When a client connects to the server, spawn a playable entity for them to control
 function server.clientconnected(client)
