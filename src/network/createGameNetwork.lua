@@ -12,8 +12,10 @@ local EmptyGameClient = require 'src/client-server/EmptyGameClient'
 local function createInMemoryNetwork(gameDefinition, params)
   params = params or {}
   local numClients = params.numClients or 1
-  local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
+  local framesBetweenFlushes = params.framesBetweenFlushes
+  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
+  local enableClientSmoothing = params.enableClientSmoothing
+  local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
 
   -- Keep track of transport streams
   local transportStreams = {}
@@ -55,7 +57,9 @@ local function createInMemoryNetwork(gameDefinition, params)
     local client = GameClient:new({
       gameDefinition = gameDefinition,
       conn = clientConn,
-      framesBetweenFlushes = framesBetweenFlushes
+      framesBetweenFlushes = framesBetweenFlushes,
+      enableSmoothing = enableClientSmoothing,
+      framesBetweenSmoothing = framesBetweenClientSmoothing
     })
     table.insert(clients, client)
   end
@@ -98,8 +102,10 @@ end
 local function createLocalhostShareNetwork(gameDefinition, params)
   params = params or {}
   local port = params.port
-  local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
+  local framesBetweenFlushes = params.framesBetweenFlushes
+  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
+  local enableClientSmoothing = params.enableClientSmoothing
+  local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
 
   -- Create the server
   local server = GameServer:new({
@@ -119,7 +125,9 @@ local function createLocalhostShareNetwork(gameDefinition, params)
       isLocalhost = true,
       port = port
     }),
-    framesBetweenFlushes = framesBetweenFlushes
+    framesBetweenFlushes = framesBetweenFlushes,
+    enableSmoothing = enableClientSmoothing,
+    framesBetweenSmoothing = framesBetweenClientSmoothing
   })
 
   -- Return a localhost network that uses share.lua
@@ -149,8 +157,10 @@ end
 
 local function createServerSideShareNetwork(gameDefinition, params)
   params = params or {}
-  local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
+  local framesBetweenFlushes = params.framesBetweenFlushes
+  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
+  local enableClientSmoothing = params.enableClientSmoothing
+  local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
 
   -- Create the server
   local server = GameServer:new({
@@ -190,8 +200,10 @@ end
 
 local function createClientSideShareNetwork(gameDefinition, params)
   params = params or {}
-  local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots or 35
+  local framesBetweenFlushes = params.framesBetweenFlushes
+  local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
+  local enableClientSmoothing = params.enableClientSmoothing
+  local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
 
   -- Create a fake server
   local server = EmptyGameServer:new()
@@ -202,7 +214,9 @@ local function createClientSideShareNetwork(gameDefinition, params)
     conn = ShareConnection:new({
       isLocalhost = false
     }),
-    framesBetweenFlushes = framesBetweenFlushes
+    framesBetweenFlushes = framesBetweenFlushes,
+    enableSmoothing = enableClientSmoothing,
+    framesBetweenSmoothing = framesBetweenClientSmoothing
   })
 
   -- Return a localhost network that uses share.lua

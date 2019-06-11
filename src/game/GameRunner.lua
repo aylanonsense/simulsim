@@ -6,9 +6,10 @@ local GameRunner = {}
 function GameRunner:new(params)
   params = params or {}
   local game = params.game
-  local allowTimeManipulation = params.allowTimeManipulation ~= false
   local framesOfHistory = params.framesOfHistory or 30
-  local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 5
+  local allowTimeManipulation = params.allowTimeManipulation ~= false
+  local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 10
+  local snapshotGenerationOffset = params.snapshotGenerationOffset or 0
   local isRenderable = params.isRenderable ~= false
 
   local runner = {
@@ -19,6 +20,7 @@ function GameRunner:new(params)
     _transformHistory = {},
     _allowTimeManipulation = allowTimeManipulation,
     _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
+    _snapshotGenerationOffset = snapshotGenerationOffset,
     _isRenderable = isRenderable,
 
     -- Public vars
@@ -61,8 +63,12 @@ function GameRunner:new(params)
               record.event = tableUtils.cloneTable(record.event)
               record.event.frame = self._eventHistory[i].event.frame + preservedFrameAdjustment
             end
-            self._eventHistory[i] = record
-            replacedEvent = true
+            if not self._allowTimeManipulation and frameToRegenerateFrom <= self.game.frame then
+              return false
+            else
+              self._eventHistory[i] = record
+              replacedEvent = true
+            end
             break
           end
         end
@@ -72,7 +78,11 @@ function GameRunner:new(params)
         end
         -- And regenerate states that are now invalid
         if frameToRegenerateFrom <= self.game.frame then
-          return self:_regenerateStateHistoryOnOrAfterFrame(frameToRegenerateFrom)
+          if self._allowTimeManipulation then
+            return self:_regenerateStateHistoryOnOrAfterFrame(frameToRegenerateFrom)
+          else
+            return false
+          end
         else
           return true
         end
@@ -84,13 +94,17 @@ function GameRunner:new(params)
       for i = #self._eventHistory, 1, -1 do
         local event = self._eventHistory[i].event
         if event.id == eventId then
-          -- Remove the event
-          table.remove(self._eventHistory, i)
-          -- Regenerate state history if the event was applied in the past
-          if event.frame <= self.game.frame then
-            self:_regenerateStateHistoryOnOrAfterFrame(event.frame)
+          if not self._allowTimeManipulation and event.frame <= self.game.frame then
+            return false
+          else
+            -- Remove the event
+            table.remove(self._eventHistory, i)
+            -- Regenerate state history if the event was applied in the past
+            if event.frame <= self.game.frame then
+              self:_regenerateStateHistoryOnOrAfterFrame(event.frame)
+            end
+            return true
           end
-          return true
         end
       end
       return false
@@ -99,29 +113,35 @@ function GameRunner:new(params)
     setState = function(self, state)
       -- Set the game's state
       self.game:setState(state)
-      -- Only future history is still valid
-      for i = #self._eventHistory, 1, -1 do
-        if self._eventHistory[i].event.frame <= self.game.frame then
-          table.remove(self._eventHistory, i)
+      if self._allowTimeManipulation then
+        -- Only future history is still valid
+        for i = #self._eventHistory, 1, -1 do
+          if self._eventHistory[i].event.frame <= self.game.frame then
+            table.remove(self._eventHistory, i)
+          end
         end
-      end
-      for i = #self._transformHistory, 1, -1 do
-        if self._transformHistory[i].frame <= self.game.frame then
-          table.remove(self._transformHistory, i)
+        for i = #self._transformHistory, 1, -1 do
+          if self._transformHistory[i].frame <= self.game.frame then
+            table.remove(self._transformHistory, i)
+          end
         end
+        -- The only valid state is the current one
+        self._stateHistory = {}
+        self:_generateStateSnapshot()
       end
-      -- The only valid state is the current one
-      self._stateHistory = {}
-      self:_generateStateSnapshot()
     end,
     -- Sets the state, or applies it to the past if the state is in the past, or schedules it to be applied in the future
     applyState = function(self, state)
       -- If the state represents a moment in the past, rewind to apply it
       if state.frame <= self.game.frame then
-        local currFrame = self.game.frame
-        if self:_rewindToFrame(state.frame) then
-          self:setState(state)
-          return self:_fastForwardToFrame(currFrame, true)
+        if self._allowTimeManipulation then
+          local currFrame = self.game.frame
+          if self:_rewindToFrame(state.frame) then
+            self:setState(state)
+            return self:_fastForwardToFrame(currFrame, true)
+          else
+            return false
+          end
         else
           return false
         end
@@ -132,27 +152,33 @@ function GameRunner:new(params)
       end
     end,
     applyStateTransform = function(self, frame, transformFunc)
-      table.insert(self._transformHistory, { frame = frame, transform = transformFunc })
-      -- If this is a moment in the past, rewind to apply it
-      if frame <= self.game.frame then
-        local currFrame = self.game.frame
-        if self:_rewindToFrame(frame) then
-          transformFunc(self.game)
-          self:_invalidateStateHistoryOnOrAfterFrame(self.game.frame)
-          self:_generateStateSnapshot()
-          return self:_fastForwardToFrame(currFrame, true)
-        else
-          return false
-        end
-      -- Otherwise, it's scheduled to happen
+      if not self._allowTimeManipulation and frame <= self.game.frame then
+        return false
       else
-        return true
+        table.insert(self._transformHistory, { frame = frame, transform = transformFunc })
+        -- If this is a moment in the past, rewind to apply it
+        if frame <= self.game.frame then
+          local currFrame = self.game.frame
+          if self:_rewindToFrame(frame) then
+            transformFunc(self.game)
+            self:_invalidateStateHistoryOnOrAfterFrame(self.game.frame)
+            self:_generateStateSnapshot()
+            return self:_fastForwardToFrame(currFrame, true)
+          else
+            return false
+          end
+        -- Otherwise, it's scheduled to happen
+        else
+          return true
+        end
       end
     end,
     moveForwardOneFrame = function(self, dt)
       self:_moveGameForwardOneFrame(dt, true, true)
       self:_removeOldHistory()
-      self:_autoUnapplyEvents()
+      if self._allowTimeManipulation then
+        self:_autoUnapplyEvents()
+      end
     end,
     reset = function(self)
       self.game:reset()
@@ -164,7 +190,7 @@ function GameRunner:new(params)
       self.game:load()
     end,
     rewind = function(self, numFrames)
-      if self:_rewindToFrame(self.game.frame - numFrames) then
+      if self._allowTimeManipulation and self:_rewindToFrame(self.game.frame - numFrames) then
         self:_invalidateStateHistoryOnOrAfterFrame(self.game.frame + 1)
         return true
       else
@@ -172,14 +198,16 @@ function GameRunner:new(params)
       end
     end,
     fastForward = function(self, numFrames)
-      return self:_fastForwardToFrame(self.game.frame + numFrames, true)
+      return self._allowTimeManipulation and self:_fastForwardToFrame(self.game.frame + numFrames, true)
     end,
     clone = function(self)
       -- Create a new runner
       local clonedRunner = GameRunner:new({
         game = self.game:clone(),
         framesOfHistory = self.framesOfHistory,
-        framesBetweenStateSnapshots = self._framesBetweenStateSnapshots
+        allowTimeManipulation = self._allowTimeManipulation,
+        framesBetweenStateSnapshots = self._framesBetweenStateSnapshots,
+        snapshotGenerationOffset = self._snapshotGenerationOffset
       })
       -- Set the runner's private vars
       clonedRunner._futureStates = tableUtils.cloneTable(self._futureStates)
@@ -284,7 +312,7 @@ function GameRunner:new(params)
         end
       end
       -- Generate a snapshot of the state every so often
-      if shouldGenerateStateSnapshots and self.game.frame % self._framesBetweenStateSnapshots == 0 then
+      if shouldGenerateStateSnapshots and self._allowTimeManipulation and (self.game.frame + self._snapshotGenerationOffset) % self._framesBetweenStateSnapshots == 0 then
         self:_generateStateSnapshot()
       end
     end,

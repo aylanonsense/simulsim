@@ -11,8 +11,8 @@ function ServerSideGameClient:new(params)
   local server = params.server
   local clientId = params.clientId
   local connId = params.connId
-  local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenSnapshots = params.framesBetweenSnapshots or 35
+  local framesBetweenFlushes = params.framesBetweenFlushes
+  local framesBetweenSnapshots = params.framesBetweenSnapshots
 
   return {
     -- Private vars
@@ -101,15 +101,16 @@ function GameServer:new(params)
   local listener = params.listener
   local gameDefinition = params.gameDefinition
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenSnapshots = params.framesBetweenSnapshots or 35
+  local framesBetweenSnapshots = params.framesBetweenSnapshots or 36
   local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
 
   -- Create the game
   local runner = GameRunner:new({
     game = gameDefinition:new(),
-    framesOfHistory = maxClientEventFramesLate + 1,
-    isRenderable = false
+    isRenderable = false,
+    allowTimeManipulation = false,
+    framesOfHistory = maxClientEventFramesLate + 1
   })
 
   -- Wrap the listener in a message server to make it easier to work with

@@ -13,26 +13,34 @@ function GameClient:new(params)
   local conn = params.conn
   local gameDefinition = params.gameDefinition
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenPings = params.framesBetweenPings or 15
+  local framesBetweenPings = params.framesBetweenPings or 16
+  local enableSmoothing = params.enableSmoothing ~= false
+  local framesBetweenSmoothing = params.framesBetweenSmoothing or 5
   local maxFramesOfLatency = params.maxFramesOfLatency or 180
+  local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 21
   local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction == true
 
   -- Create a game for the client and a runner for it
   local runner = GameRunner:new({
     game = gameDefinition:new(),
     isRenderable = true,
-    allowTimeManipulation = false
+    allowTimeManipulation = false,
+    framesBetweenStateSnapshots = framesBetweenStateSnapshots
   })
   local runnerWithoutSmoothing = GameRunner:new({
     game = gameDefinition:new(),
-    isRenderable = false
+    isRenderable = false,
+    framesBetweenStateSnapshots = framesBetweenStateSnapshots,
+    snapshotGenerationOffset = 0
   })
   local runnerWithoutPrediction
   local gameWithoutPrediction
   if exposeGameWithoutPrediction then
     runnerWithoutPrediction = GameRunner:new({
       game = gameDefinition:new(),
-      isRenderable = false
+      isRenderable = false,
+      framesBetweenStateSnapshots = framesBetweenStateSnapshots,
+      snapshotGenerationOffset = math.floor(framesBetweenStateSnapshots / 2)
     })
     gameWithoutPrediction = runnerWithoutPrediction.game
   end
@@ -66,10 +74,12 @@ function GameClient:new(params)
     _timeSyncOptimizer = timeSyncOptimizer,
     _latencyOptimizer = latencyOptimizer,
     _framesOfLatency = 0,
-    _framesUntilNextPing = framesBetweenPings,
     _framesUntilNextFlush = framesBetweenFlushes,
-    _framesBetweenPings = framesBetweenPings,
+    _framesUntilNextPing = framesBetweenPings,
     _framesBetweenFlushes = framesBetweenFlushes,
+    _framesBetweenPings = framesBetweenPings,
+    _enableSmoothing = enableSmoothing,
+    _framesBetweenSmoothing = framesBetweenSmoothing,
     _maxFramesOfLatency = maxFramesOfLatency,
     _connectCallbacks = {},
     _connectFailureCallbacks = {},
@@ -292,7 +302,9 @@ function GameClient:new(params)
         self._runnerWithoutPrediction.framesOfHistory = self._runnerWithoutSmoothing.framesOfHistory
       end
       -- Smooth game
-      self:_smoothGame()
+      if self._enableSmoothing and (self._framesBetweenSmoothing <= 0 or self._clientFrame % self._framesBetweenSmoothing == 0) then
+        self:_smoothGame()
+      end
     end,
     simulateNetworkConditions = function(self, params)
       self._messageClient:simulateNetworkConditions(params)
