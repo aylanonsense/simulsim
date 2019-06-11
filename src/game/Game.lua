@@ -69,6 +69,12 @@ function Game:new(params)
       -- Return the newly-cloned game
       return clonedGame
     end,
+    cloneEntity = function(self, entity)
+      return self:deserializeEntity(self:serializeEntity(entity))
+    end,
+    copyEntityProps = function(self, sourceEntity, targetEntity)
+      return tableUtils.copyProps(sourceEntity, tableUtils.clearProps(targetEntity))
+    end,
     getInputsForClient = function(self, clientId)
       return self.inputs[clientId]
     end,

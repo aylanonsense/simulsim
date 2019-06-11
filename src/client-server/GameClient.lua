@@ -301,6 +301,7 @@ function GameClient:new(params)
       end
       -- Smooth game
       if self._framesBetweenSmoothing <= 0 or self._clientFrame % self._framesBetweenSmoothing == 0 then
+        -- print('SMOOTHING GAME')
         self:_smoothGame()
       end
     end,
@@ -339,13 +340,17 @@ function GameClient:new(params)
       end
     end,
     smoothEntity = function(self, game, entity, idealEntity)
-      return idealEntity
+      if entity and idealEntity then
+        return game:copyEntityProps(idealEntity, entity)
+      elseif idealEntity then
+        return game:cloneEntity(idealEntity)
+      end
     end,
     smoothInputs = function(self, game, inputs, idealInputs)
-      return idealInputs
+      return tableUtils.copyProps(idealInputs, tableUtils.clearProps(inputs))
     end,
     smoothData = function(self, game, data, idealData)
-      return idealData
+      return tableUtils.copyProps(idealData, tableUtils.clearProps(data))
     end,
     isEntityUsingPrediction = function(self, entity)
       return entity and entity.clientId == self.clientId
@@ -494,6 +499,7 @@ function GameClient:new(params)
       sourceGame.inputs = self:syncInputs(sourceGame, sourceGame.inputs, tableUtils.cloneTable(targetGame.inputs), isPrediction)
     end,
     _handleStateSnapshot = function(self, state)
+      -- print('SNAPSHOT FROM SERVER')
       if not self._hasSetInitialState then
         self:_setInitialState(state)
       else
@@ -515,7 +521,7 @@ function GameClient:new(params)
     _smoothGame = function(self)
       local isStable = self._hasSetInitialState and self._hasStabilizedTimeOffset and self._hasStabilizedLatency
       local sourceGame = self.game
-      local targetGame = self.gameWithoutSmoothing:clone()
+      local targetGame = self.gameWithoutSmoothing
       local entityIndex = {}
       local entities = {}
       -- Just copy the current frame

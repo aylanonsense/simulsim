@@ -35,8 +35,8 @@ end
 local network, server, client = simulsim.createGameNetwork(game, { mode = 'development' })
 
 function server.load()
-  -- without smoothing or snapshots = 8750 entities
-  for i = 1, 5500 do
+  -- upwards of 20,000 entities without smoothing, receiving snapshots, or generating snapshots
+  for i = 1, 9500 do
     server.fireEvent('spawn-box', {
       x = 0,
       y = math.random(0, 380),

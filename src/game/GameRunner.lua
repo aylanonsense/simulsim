@@ -8,7 +8,7 @@ function GameRunner:new(params)
   local game = params.game
   local framesOfHistory = params.framesOfHistory or 30
   local allowTimeManipulation = params.allowTimeManipulation ~= false
-  local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 10
+  local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 21
   local snapshotGenerationOffset = params.snapshotGenerationOffset or 0
   local isRenderable = params.isRenderable ~= false
 
@@ -127,7 +127,7 @@ function GameRunner:new(params)
         end
         -- The only valid state is the current one
         self._stateHistory = {}
-        self:_generateStateSnapshot()
+        self:_generateStateSnapshot(state)
       end
     end,
     -- Sets the state, or applies it to the past if the state is in the past, or schedules it to be applied in the future
@@ -250,8 +250,12 @@ function GameRunner:new(params)
       end
     end,
     -- Generates a state snapshot and adds it to the state history
-    _generateStateSnapshot = function(self)
-      table.insert(self._stateHistory, self.game:getState())
+    _generateStateSnapshot = function(self, state)
+      if not state then
+        -- print('GENERATING STATE SNAPSHOT')
+        state = self.game:getState()
+      end
+      table.insert(self._stateHistory, state)
     end,
     -- Remove all state snapshots after the given frame
     _invalidateStateHistoryOnOrAfterFrame = function(self, frame)
