@@ -1,7 +1,7 @@
 local FRAME_RATE = 60
 local LOVE_METHODS = {
   load = { server = true, client = true },
-  -- update = { server = true, client = true },
+  update = { server = true, client = true },
   draw = { client = true },
   lowmemory = { server = true, client = true },
   quit = { server = true, client = true },
@@ -211,7 +211,10 @@ local function createClientAPI(client, isClientSide)
   return api
 end
 
-local function createPublicAPI(network)
+local function createPublicAPI(network, params)
+  params = params or {}
+  local overrideCallbackMethods = params.overrideCallbackMethods ~= false
+
   -- Create client APIs
   local clientAPIs = {}
   for _, client in ipairs(network.clients) do
@@ -221,76 +224,88 @@ local function createPublicAPI(network)
   -- Create server API
   local serverAPI = createServerAPI(network.server, network:isServerSide())
 
-  -- Bind events
-  for cbName, where in pairs(LOVE_METHODS) do
-    local cb = love[cbName]
-    love[cbName] = function(...)
-      if where.server and network:isServerSide() then
-        local serverCb = serverAPI[cbName]
-        if serverCb then
-          serverCb(...)
+  -- Create network API
+  local networkAPI = {
+    server = serverAPI,
+    client = clientAPIs[1],
+    clients = clientAPIs,
+    isClientSide = function()
+      return network:isClientSide()
+    end,
+    isServerSide = function()
+      return network:isServerSide()
+    end
+  }
+
+  -- Add callback methods onto the network API
+  for methodName, where in pairs(LOVE_METHODS) do
+    -- Add an update method onto the network API
+    if methodName == 'update' then
+      local leftoverTime = 1 / (2 * FRAME_RATE)
+      networkAPI.update = function(dt)
+        -- Figure out how many frames have passed
+        leftoverTime = leftoverTime + dt
+        local df = math.floor(leftoverTime * FRAME_RATE)
+        if df > 1 then
+          df = df - 1
         end
-      end
-      if where.client and network:isClientSide() then
-        for _, clientAPI in ipairs(clientAPIs) do
-          local clientCb = clientAPI[cbName]
-          if clientCb then
-            clientCb(...)
+        leftoverTime = leftoverTime - df / FRAME_RATE
+        -- Update everything for each frame that has passed
+        network:update(dt)
+        for f = 1, df do
+          network:moveForwardOneFrame(1 / FRAME_RATE)
+          if network:isServerSide() then
+            if serverAPI.update then
+              serverAPI.update(1 / FRAME_RATE)
+            end
+          end
+          if network:isClientSide() then
+            for _, clientAPI in ipairs(clientAPIs) do
+              if clientAPI.update then
+                clientAPI.update(1 / FRAME_RATE)
+              end
+            end
           end
         end
       end
-      if cb then
-        cb(...)
-      end
-    end
-  end
-
-  -- Define method to update the network
-  local leftoverTime = 1 / (2 * FRAME_RATE)
-  local updateNetwork = function(dt)
-    -- Figure out how many frames have passed
-    leftoverTime = leftoverTime + dt
-    local df = math.floor(leftoverTime * FRAME_RATE)
-    if df > 1 then
-      df = df - 1
-    end
-    leftoverTime = leftoverTime - df / FRAME_RATE
-    -- Update everything for each frame that has passed
-    network:update(dt)
-    for f = 1, df do
-      network:moveForwardOneFrame(1 / FRAME_RATE)
-      if network:isServerSide() then
-        if serverAPI.update then
-          serverAPI.update(1 / FRAME_RATE)
+    -- Add a callback method onto the network API
+    else
+      networkAPI[methodName] = function(...)
+        if where.server and network:isServerSide() then
+          if serverAPI[methodName] then
+            serverAPI[methodName](...)
+          end
         end
-      end
-      if network:isClientSide() then
-        for _, clientAPI in ipairs(clientAPIs) do
-          if clientAPI.update then
-            clientAPI.update(1 / FRAME_RATE)
+        if where.client and network:isClientSide() then
+          for _, clientAPI in ipairs(clientAPIs) do
+            if clientAPI[methodName] then
+              clientAPI[methodName](...)
+            end
           end
         end
       end
     end
+    -- Override the default LOVE method
+    if overrideCallbackMethods then
+      local originalMethod = love[methodName]
+      love[methodName] = function(...)
+        if originalMethod then
+          originalMethod(...)
+        end
+        networkAPI[methodName](...)
+      end
+    end
   end
 
-  -- Bind update event
-  local updateCallback = love.update
-  love.update = function(dt, ...)
-    if updateCallback then
-      updateCallback(dt, ...)
+  -- Bind background update event (so simulsim can update even in the background)
+  if overrideCallbackMethods then
+    local originalMethod = castle.backgroundupdate
+    castle.backgroundupdate = function(...)
+      if originalMethod then
+        originalMethod(...)
+      end
+      networkAPI.update(...)
     end
-    updateNetwork(dt)
-  end
-
-  -- Bind background update event
-  local backgroundUpdateCallback = castle.backgroundupdate
-  castle.backgroundupdate = function(dt, ...)
-    if backgroundUpdateCallback then
-      backgroundUpdateCallback(dt, ...)
-    end
-    -- Update the network even in the background
-    updateNetwork(dt)
   end
 
   -- Start the server
@@ -300,12 +315,6 @@ local function createPublicAPI(network)
   for _, client in ipairs(network.clients) do
     client:connect()
   end
-
-  local networkAPI = {
-    server = serverAPI,
-    client = clientAPIs[1],
-    clients = clientAPIs
-  }
 
   -- Return APIs
   return networkAPI, serverAPI, clientAPIs[1], clientAPIs
