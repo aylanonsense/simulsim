@@ -14,7 +14,6 @@ function GameClient:new(params)
   local gameDefinition = params.gameDefinition
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
   local framesBetweenPings = params.framesBetweenPings or 16
-  local enableSmoothing = params.enableSmoothing ~= false
   local framesBetweenSmoothing = params.framesBetweenSmoothing or 5
   local maxFramesOfLatency = params.maxFramesOfLatency or 180
   local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 21
@@ -78,7 +77,6 @@ function GameClient:new(params)
     _framesUntilNextPing = framesBetweenPings,
     _framesBetweenFlushes = framesBetweenFlushes,
     _framesBetweenPings = framesBetweenPings,
-    _enableSmoothing = enableSmoothing,
     _framesBetweenSmoothing = framesBetweenSmoothing,
     _maxFramesOfLatency = maxFramesOfLatency,
     _connectCallbacks = {},
@@ -302,7 +300,7 @@ function GameClient:new(params)
         self._runnerWithoutPrediction.framesOfHistory = self._runnerWithoutSmoothing.framesOfHistory
       end
       -- Smooth game
-      if self._enableSmoothing and (self._framesBetweenSmoothing <= 0 or self._clientFrame % self._framesBetweenSmoothing == 0) then
+      if self._framesBetweenSmoothing <= 0 or self._clientFrame % self._framesBetweenSmoothing == 0 then
         self:_smoothGame()
       end
     end,
