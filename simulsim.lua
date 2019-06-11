@@ -8,7 +8,7 @@ local function defineGame(params)
 end
 
 local function createGameNetworkAPI(gameDefinition, params)
-  return createPublicAPI(createGameNetwork(gameDefinition, params))
+  return createPublicAPI(createGameNetwork(gameDefinition, params), params)
 end
 
 local function setLogLevel(lvl)
