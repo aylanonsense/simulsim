@@ -32,7 +32,7 @@ function game.handleEvent(self, eventType, eventData)
   end
 end
 
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer' })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'development' })
 
 function server.load()
   -- upwards of 20,000 entities without smoothing, receiving snapshots, or generating snapshots
