@@ -619,7 +619,6 @@ function GameClient:new(params)
       end
     end,
     _addClientMetadata = function(self, obj)
-      local frame = self.gameWithoutSmoothing.frame
       obj.clientMetadata = {
         clientId = self.clientId,
         clientFrameSent = self._clientFrame

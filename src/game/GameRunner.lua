@@ -22,6 +22,7 @@ function GameRunner:new(params)
     _framesBetweenStateSnapshots = framesBetweenStateSnapshots,
     _snapshotGenerationOffset = snapshotGenerationOffset,
     _isRenderable = isRenderable,
+    _frameToSettleFrom = nil,
 
     -- Public vars
     game = game,
@@ -29,6 +30,21 @@ function GameRunner:new(params)
 
     -- Public methods
     -- Adds an event to be applied on the given frame, which may trigger a rewind
+    settleRecentChanges = function(self)
+      local currFrame = self.game.frame
+      local frameToSettleFrom = self._frameToSettleFrom
+      self._frameToSettleFrom = nil
+      if frameToSettleFrom and frameToSettleFrom <= self.game.frame then
+        if self:_rewindToFrame(frameToSettleFrom - 1) then
+          self:_invalidateStateHistoryOnOrAfterFrame(frameToSettleFrom)
+          self:_generateStateSnapshot()
+          return self:_fastForwardToFrame(currFrame, true)
+        else
+          return false
+        end
+      end
+      return true
+    end,
     applyEvent = function(self, event, params)
       params = params or {}
       local preserveFrame = params.preserveFrame
@@ -78,7 +94,12 @@ function GameRunner:new(params)
             if not replacedEvent then
               table.insert(self._eventHistory, record)
             end
-            return self:_regenerateStateHistoryOnOrAfterFrame(frameToRegenerateFrom)
+            if self._frameToSettleFrom then
+              self._frameToSettleFrom = math.min(frameToRegenerateFrom, self._frameToSettleFrom)
+            else
+              self._frameToSettleFrom = frameToRegenerateFrom
+            end
+            return true
           else
             return false
           end
@@ -103,7 +124,11 @@ function GameRunner:new(params)
             table.remove(self._eventHistory, i)
             -- Regenerate state history if the event was applied in the past
             if event.frame <= self.game.frame then
-              self:_regenerateStateHistoryOnOrAfterFrame(event.frame)
+              if self._frameToSettleFrom then
+                self._frameToSettleFrom = math.min(event.frame, self._frameToSettleFrom)
+              else
+                self._frameToSettleFrom = event.frame
+              end
             end
             return true
           end
@@ -126,6 +151,7 @@ function GameRunner:new(params)
           end
         end
         -- The only valid state is the current one
+        self._frameToSettleFrom = nil
         tableUtils.clearProps(self._stateHistory)
         self:_generateStateSnapshot(tableUtils.cloneTable(state))
       end
@@ -137,13 +163,13 @@ function GameRunner:new(params)
       -- If the state represents a moment in the past, rewind to apply it
       if state.frame <= self.game.frame then
         if self._allowTimeManipulation then
-          local currFrame = self.game.frame
-          if self:_rewindToFrame(state.frame) then
-            self:setState(state)
-            return self:_fastForwardToFrame(currFrame, true)
+          if self._frameToSettleFrom then
+            self._frameToSettleFrom = math.min(state.frame, self._frameToSettleFrom)
           else
-            return false
+            self._frameToSettleFrom = state.frame
           end
+          table.insert(self._futureStates, state)
+          return true
         else
           return false
         end
@@ -158,24 +184,19 @@ function GameRunner:new(params)
         return false
       else
         table.insert(self._transformHistory, { frame = frame, transform = transformFunc })
-        -- If this is a moment in the past, rewind to apply it
+        -- If this is a moment in the past, take note that we'll need to apply it
         if frame <= self.game.frame then
-          local currFrame = self.game.frame
-          if self:_rewindToFrame(frame) then
-            transformFunc(self.game)
-            self:_invalidateStateHistoryOnOrAfterFrame(self.game.frame)
-            self:_generateStateSnapshot()
-            return self:_fastForwardToFrame(currFrame, true)
+          if self._frameToSettleFrom then
+            self._frameToSettleFrom = math.min(frame, self._frameToSettleFrom)
           else
-            return false
+            self._frameToSettleFrom = frame
           end
-        -- Otherwise, it's scheduled to happen
-        else
-          return true
         end
+        return true
       end
     end,
     moveForwardOneFrame = function(self, dt)
+      self:settleRecentChanges()
       self:_moveGameForwardOneFrame(dt, true, true)
       self:_removeOldHistory() -- TODO consider only doing this every so often
       if self._allowTimeManipulation then

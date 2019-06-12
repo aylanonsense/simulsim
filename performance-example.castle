@@ -1,0 +1,10 @@
+---
+main: performance-example.lua
+name: Simulsim Example - Performance
+description: This is a performance test.
+username: bridgs
+primaryColor: C0C0C0
+multiplayer:
+    - enabled: true
+dimensions: 430x430
+scaling: on
