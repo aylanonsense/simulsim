@@ -1,3 +1,5 @@
+local tableUtils = require 'src/utils/table'
+
 local FRAME_RATE = 60
 local LOVE_METHODS = {
   load = { server = true, client = true },
@@ -67,7 +69,7 @@ local function createServerAPI(server, isServerSide)
       return true
     end,
     generateStateSnapshotForClient = function(client)
-      return server:getGame():getState()
+      return tableUtils.cloneTable(server.game:getState())
     end,
 
     -- Functions to call
@@ -83,9 +85,6 @@ local function createServerAPI(server, isServerSide)
           return client
         end
       end
-    end,
-    getGame = function()
-      return server:getGame()
     end,
     fireEvent = function(eventType, eventData, params)
       return server:fireEvent(eventType, eventData, params)

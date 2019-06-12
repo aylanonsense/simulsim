@@ -36,9 +36,9 @@ local network, server, client = simulsim.createGameNetwork(game, { mode = 'devel
 
 function server.load()
   -- upwards of 20,000 entities without smoothing, receiving snapshots, or generating snapshots
-  for i = 1, 9500 do
+  for i = 1, 12000 do
     server.fireEvent('spawn-box', {
-      x = 0,
+      x = math.random(0, 10),
       y = math.random(0, 380),
       vx = 50,
       vy = 0,

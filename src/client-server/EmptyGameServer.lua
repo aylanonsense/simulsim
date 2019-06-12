@@ -15,7 +15,6 @@ function EmptyGameServer:new(params)
     getClientById = function(self, clientId) end,
     getClients = function(self) end,
     fireEvent = function(self, eventType, eventData, params) end,
-    getGame = function(self) end,
     update = function(self, dt) end,
     moveForwardOneFrame = function(self, dt) end,
 

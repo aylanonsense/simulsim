@@ -1,3 +1,5 @@
+local marshal = require 'marshal'
+
 local LocalTransportStream = {}
 
 function LocalTransportStream:new(params)
@@ -23,11 +25,11 @@ function LocalTransportStream:new(params)
       end
       -- Receive the message immediately
       if timeUntilReceive <= 0 then
-        self:_handleReceive(msg, unlosable)
+        self:_handleReceive(marshal.encode(msg), unlosable)
       -- Or schedule it to be received later
       else
         table.insert(self._packets, {
-          message = msg,
+          message = marshal.encode(msg),
           timeUntilReceive = timeUntilReceive,
           unlosable = unlosable or false
         })
@@ -79,7 +81,7 @@ function LocalTransportStream:new(params)
     _handleReceive = function(self, msg, unlosable)
       if unlosable or math.random() >= self._packetLossChance then
         for _, callback in ipairs(self._receiveCallbacks) do
-          callback(msg)
+          callback(marshal.decode(msg))
         end
       end
     end

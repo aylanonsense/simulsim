@@ -414,12 +414,12 @@ function GameClient:new(params)
       self._timeSyncOptimizer:reset()
       self._latencyOptimizer:reset()
       -- Set the state of the client-side game
-      self._runnerWithoutSmoothing:reset()
-      self._runnerWithoutSmoothing:setState(state)
       if self._runnerWithoutPrediction then
         self._runnerWithoutPrediction:reset()
-        self._runnerWithoutPrediction:setState(state)
+        self._runnerWithoutPrediction:setState(tableUtils.cloneTable(state))
       end
+      self._runnerWithoutSmoothing:reset()
+      self._runnerWithoutSmoothing:setState(state)
     end,
     _handleDestabilize = function(self)
       self._hasSetInitialState = false
@@ -525,19 +525,20 @@ function GameClient:new(params)
       if not self._hasSetInitialState then
         self:_setInitialState(state)
       else
-        self:_recordTimeOffset(state.frame)
+        local frame = state.frame
+        self:_recordTimeOffset(frame)
         -- state represents what the game would currently look like with no client-side prediction
         if self._runnerWithoutPrediction then
-          self._runnerWithoutPrediction:applyState(state)
+          self._runnerWithoutPrediction:applyState(tableUtils.cloneTable(state))
         end
         local sourceGame = self.gameWithoutSmoothing
         local targetGame = self._gameDefinition:new({ initialState = state })
         -- Fix client-predicted inconsistencies in the past
-        self._runnerWithoutSmoothing:applyStateTransform(state.frame - self._framesOfLatency, function(game)
+        self._runnerWithoutSmoothing:applyStateTransform(frame - self._framesOfLatency, function(game)
           self:_syncToTargetGame(sourceGame, targetGame, true)
         end)
         -- Fix non-predicted inconsistencies in the present
-        self._runnerWithoutSmoothing:applyStateTransform(state.frame, function(game)
+        self._runnerWithoutSmoothing:applyStateTransform(frame, function(game)
           self:_syncToTargetGame(sourceGame, targetGame, false)
         end)
       end

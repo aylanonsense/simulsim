@@ -101,7 +101,7 @@ function GameServer:new(params)
   local listener = params.listener
   local gameDefinition = params.gameDefinition
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenSnapshots = params.framesBetweenSnapshots or 36
+  local framesBetweenSnapshots = params.framesBetweenSnapshots or 46
   local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
 
@@ -168,9 +168,6 @@ function GameServer:new(params)
       -- Return the event
       return event
     end,
-    getGame = function(self)
-      return self.game
-    end,
     update = function(self, dt)
       -- Update the underlying messaging server
       self._messageServer:update(dt)
@@ -202,7 +199,7 @@ function GameServer:new(params)
       return true
     end,
     generateStateSnapshotForClient = function(self, client)
-      return self.game:getState()
+      return tableUtils.cloneTable(self.game:getState())
     end,
 
     -- Callback methods
