@@ -1,14 +1,14 @@
 local entities = {}
 
 function love.load()
-  for i = 1, 1150 * 72 do
+  for i = 1, 40000 do
     table.insert(entities, {
-      x = math.random(0, 380),
+      x = math.random(0, 10),
       y = math.random(0, 380),
       width = 20,
       height = 20,
-      vx = math.random(-100, 100),
-      vy = math.random(-100, 100),
+      vx = 50,
+      vy = 0,
       color = { math.random(), math.random(), math.random() }
     })
   end
