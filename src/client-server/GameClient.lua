@@ -318,25 +318,47 @@ function GameClient:new(params)
         isEntityUsingPrediction = self:isEntityUsingPrediction(candidateEntity, self.clientId)
       end
       if isEntityUsingPrediction == isPrediction then
-        return candidateEntity
+        if entity then
+          return game:copyEntityProps(candidateEntity, entity)
+        else
+          return game:cloneEntity(candidateEntity)
+        end
       else
         return entity
       end
     end,
     syncInputs = function(self, game, inputs, candidateInputs, isPrediction)
       if isPrediction then
-        inputs[self.clientId] = candidateInputs[self.clientId]
-        return inputs
+        if inputs[self.clientId] and candidateInputs[self.clientId] then
+          tableUtils.copyProps(candidateInputs[self.clientId], tableUtils.clearProps(inputs[self.clientId]))
+        elseif candidateInputs[self.clientId] then
+          inputs[self.clientId] = tableUtils.cloneTable(candidateInputs[self.clientId])
+        else
+          inputs[self.clientId] = nil
+        end
       else
-        candidateInputs[self.clientId] = inputs[self.clientId]
-        return candidateInputs
+        for k, v in ipairs(inputs) do
+          if k ~= self.clientId then
+            if v and candidateInputs[k] then
+              tableUtils.copyProps(candidateInputs[k], tableUtils.clearProps(v))
+            else
+              inputs[k] = nil
+            end
+          end
+        end
+        for k, v in ipairs(candidateInputs) do
+          if k ~= self.clientId and not inputs[k] then
+            inputs[k] = tableUtils.cloneTable(v)
+          end
+        end
       end
+      return inputs
     end,
     syncData = function(self, game, data, candidateData, isPrediction)
       if isPrediction then
         return data
       else
-        return candidateData
+        return tableUtils.copyProps(candidateData, tableUtils.clearProps(data))
       end
     end,
     smoothEntity = function(self, game, entity, idealEntity)
@@ -494,9 +516,9 @@ function GameClient:new(params)
       sourceGame.entities = entities
       sourceGame:reindexEntities(entityIndex)
       -- Sync data
-      sourceGame.data = self:syncData(sourceGame, sourceGame.data, tableUtils.cloneTable(targetGame.data), isPrediction)
+      sourceGame.data = self:syncData(sourceGame, sourceGame.data, targetGame.data, isPrediction)
       -- Sync inputs
-      sourceGame.inputs = self:syncInputs(sourceGame, sourceGame.inputs, tableUtils.cloneTable(targetGame.inputs), isPrediction)
+      sourceGame.inputs = self:syncInputs(sourceGame, sourceGame.inputs, targetGame.inputs, isPrediction)
     end,
     _handleStateSnapshot = function(self, state)
       -- print('SNAPSHOT FROM SERVER')
@@ -508,13 +530,15 @@ function GameClient:new(params)
         if self._runnerWithoutPrediction then
           self._runnerWithoutPrediction:applyState(state)
         end
+        local sourceGame = self.gameWithoutSmoothing
+        local targetGame = self._gameDefinition:new({ initialState = state })
         -- Fix client-predicted inconsistencies in the past
         self._runnerWithoutSmoothing:applyStateTransform(state.frame - self._framesOfLatency, function(game)
-          self:_syncToTargetGame(self.gameWithoutSmoothing, self._gameDefinition:new({ initialState = state }), true)
+          self:_syncToTargetGame(sourceGame, targetGame, true)
         end)
         -- Fix non-predicted inconsistencies in the present
         self._runnerWithoutSmoothing:applyStateTransform(state.frame, function(game)
-          self:_syncToTargetGame(self.gameWithoutSmoothing, self._gameDefinition:new({ initialState = state }), false)
+          self:_syncToTargetGame(sourceGame, targetGame, false)
         end)
       end
     end,

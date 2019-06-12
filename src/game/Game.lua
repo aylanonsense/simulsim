@@ -81,11 +81,6 @@ function Game:new(params)
     -- Gets an entity with the given id
     getEntityById = function(self, entityId)
       return self._entityIndex[entityId]
-      -- for index, entity in ipairs(self.entities) do
-      --   if self:getEntityId(entity) == entityId then
-      --     return entity, index
-      --   end
-      -- end
     end,
     getEntityWhere = function(self, criteria)
       for index, entity in ipairs(self.entities) do
