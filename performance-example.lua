@@ -58,7 +58,7 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 local network, server, client = simulsim.createGameNetwork(game, {
-  mode = 'development',
+  mode = 'multiplayer',
   numClients = NUM_CLIENTS
 })
 
