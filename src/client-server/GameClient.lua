@@ -414,7 +414,7 @@ function GameClient:new(params)
       self:_applyEvent(event, { preservedFrameAdjustment = preservedFrameAdjustment })
     end,
     _handleRejectEvent = function(self, event)
-      logger.silly('Client ' .. self.clientId .. ' informed that "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server [frame=' .. self.game.frame .. ']')
+      logger.debug('Client ' .. self.clientId .. ' informed that "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server [frame=' .. self.game.frame .. ']')
       self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
       self:_unapplyEvent(event)
     end,
