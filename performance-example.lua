@@ -49,7 +49,7 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 local network, server, client = simulsim.createGameNetwork(game, {
-  mode = 'development',
+  mode = 'multiplayer',
   numClients = NUM_CLIENTS,
   exposeGameWithoutPrediction = true
 })
@@ -178,8 +178,8 @@ for _, client in ipairs(network.clients) do
   function client.draw()
     if client.clientId then
       -- Offset the drawn elements so that you can see both clients' screens side-by-side
-      love.graphics.reset()
-      love.graphics.translate(210 * ((client.clientId - 1) % 3) + 10, 210 * math.floor((client.clientId - 1) / 3) + 10)
+      -- love.graphics.reset()
+      -- love.graphics.translate(210 * ((client.clientId - 1) % 3) + 10, 210 * math.floor((client.clientId - 1) / 3) + 10)
       -- Clear the screen
       love.graphics.setColor(0.1, 0.1, 0.1)
       love.graphics.rectangle('fill', 0, 0, 200, 200)
