@@ -80,8 +80,8 @@ function ServerSideGameClient:new(params)
       end
     end,
     -- Rejects an event that came from this client
-    _rejectEvent = function(self, event)
-      self._messageServer:buffer(self._connId, { 'reject-event', event })
+    _rejectEvent = function(self, event, reason)
+      self._messageServer:buffer(self._connId, { 'reject-event', { event, reason } })
       if self._framesBetweenFlushes <= 0 then
         self._messageServer:flush(self._connId)
       end
@@ -282,9 +282,11 @@ function GameServer:new(params)
             end
             local isTooEarly = (frameOffset > maxFramesEarly)
             local isTooLate = ((-frameOffset) > maxFramesLate)
+            local rejectReason
             if not isTooEarly and not isTooLate then
               if event.isInputEvent and event.type == 'set-inputs' and self.game.frameOfLastInput[client.clientId] and self.game.frameOfLastInput[client.clientId] > event.frame then
                 logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because newer inputs have already been applied [frame=' .. self.game.frame .. ']')
+                rejectReason = 'Newer inputs have already been applied'
               else
                 event.serverMetadata.proposedEventFrame = event.frame
                 -- Apply the event server-side and let all clients know about it
@@ -295,15 +297,17 @@ function GameServer:new(params)
                 eventApplied = self:_applyEvent(event)
                 if not eventApplied then
                   logger.silly('Server failed to apply "' .. event.type .. '" event from client ' .. client.clientId .. ' [frame=' .. self.game.frame .. ']')
+                  rejectReason = 'Failed to apply event'
                 end
               end
             else
               logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because it was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'too early' or 'too late') .. ' [frame=' .. self.game.frame .. ']')
+              rejectReason = 'Event was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'too early' or 'too late')
             end
           end
           if not eventApplied then
             -- Let the client know that their event was rejected or wasn't able to be applied
-            client:_rejectEvent(event)
+            client:_rejectEvent(event, rejectReason)
           end
         elseif messageType == 'ping' then
           local pingResponse = self:_addServerMetadata(messageContent)

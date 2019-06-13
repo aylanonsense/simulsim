@@ -438,7 +438,7 @@ function GameClient:new(params)
       end
     end,
     _handleDisconnect = function(self, reason)
-      logger.info('Client ' .. self.clientId .. ' disconnected from server: ' .. (reason or 'No reason given') .. '[frame=' .. self.game.frame .. ']')
+      logger.info('Client ' .. self.clientId .. ' disconnected from server: ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
       self._framesOfLatency = 0
       self._hasSetInitialState = false
       self._hasStabilizedLatency = false
@@ -451,7 +451,7 @@ function GameClient:new(params)
       if messageType == 'event' then
         self:_handleReceiveEvent(messageContent)
       elseif messageType == 'reject-event' then
-        self:_handleRejectEvent(messageContent)
+        self:_handleRejectEvent(messageContent[1], messageContent[2])
       elseif messageType == 'ping-response' then
         self:_handlePingResponse(messageContent)
       elseif messageType == 'state-snapshot' then
@@ -469,8 +469,8 @@ function GameClient:new(params)
       self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
       self:_applyEvent(event, { preservedFrameAdjustment = preservedFrameAdjustment })
     end,
-    _handleRejectEvent = function(self, event)
-      logger.silly('Client ' .. self.clientId .. ' informed that "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server [frame=' .. self.game.frame .. ']')
+    _handleRejectEvent = function(self, event, reason)
+      logger.debug('Client ' .. self.clientId .. ' "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server: ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
       self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
       self:_unapplyEvent(event)
     end,
