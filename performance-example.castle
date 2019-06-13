@@ -1,6 +1,6 @@
 ---
 main: performance-example.lua
-name: Simulsim Example - Performance
+name: perf
 description: This is a performance test.
 username: bridgs
 primaryColor: C0C0C0
