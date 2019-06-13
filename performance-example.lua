@@ -1,13 +1,13 @@
 local simulsim = require 'simulsim'
 
-simulsim.setLogLevel('DEBUG')
+-- simulsim.setLogLevel('DEBUG')
 
-local NUM_CLIENTS = 1
+local NUM_CLIENTS = 9
 
 local game = simulsim.defineGame()
 function game.load(self)
-  self.data.numClientEventsPerSecond = 1
-  self.data.redundantEvents = true
+  self.data.numClientEventsPerSecond = 66
+  self.data.redundantEvents = false
 end
 function game.update(self, dt)
   for _, entity in ipairs(self.entities) do
@@ -58,7 +58,7 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 local network, server, client = simulsim.createGameNetwork(game, {
-  mode = 'multiplayer',
+  mode = 'development',
   numClients = NUM_CLIENTS
 })
 
@@ -104,7 +104,7 @@ for _, client in ipairs(network.clients) do
   local eventsFired = 0
 
   function client.load()
-    client.simulateNetworkConditions({ latency = 350, latencyDeviation = 200 })
+    client.simulateNetworkConditions({ latency = 350, latencyDeviation = 10 })
     client.timer = math.random()
     love.graphics.setFont(love.graphics.newFont(10))
   end
@@ -212,8 +212,8 @@ for _, client in ipairs(network.clients) do
   function client.draw()
     if client.clientId then
       -- Offset the drawn elements so that you can see both clients' screens side-by-side
-      -- love.graphics.reset()
-      -- love.graphics.translate(210 * ((client.clientId - 1) % 3) + 10, 210 * math.floor((client.clientId - 1) / 3) + 10)
+      love.graphics.reset()
+      love.graphics.translate(210 * ((client.clientId - 1) % 3) + 10, 210 * math.floor((client.clientId - 1) / 3) + 10)
       -- Clear the screen
       love.graphics.setColor(0.1, 0.1, 0.1)
       love.graphics.rectangle('fill', 0, 0, 200, 200)

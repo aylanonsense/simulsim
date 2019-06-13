@@ -6,5 +6,5 @@ username: bridgs
 primaryColor: C0C0C0
 multiplayer:
     - enabled: true
-dimensions: 200x200
+dimensions: 640x640
 scaling: on
