@@ -58,9 +58,8 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 local network, server, client = simulsim.createGameNetwork(game, {
-  mode = 'multiplayer',
-  numClients = NUM_CLIENTS,
-  exposeGameWithoutPrediction = true
+  mode = 'development',
+  numClients = NUM_CLIENTS
 })
 
 function server.clientconnected(client)
@@ -112,11 +111,11 @@ for _, client in ipairs(network.clients) do
 
   function client.keypressed(key)
     if key == 'up' then
-      client.fireEvent('increase-events')
+      client.fireEvent('increase-events', nil, { predictClientSide = false })
     elseif key == 'down' then
-      client.fireEvent('decrease-events')
+      client.fireEvent('decrease-events', nil, { predictClientSide = false })
     elseif key == 'lshift' then
-      client.fireEvent('toggle-events')
+      client.fireEvent('toggle-events', nil, { predictClientSide = false })
     end
   end
 
@@ -181,7 +180,7 @@ for _, client in ipairs(network.clients) do
         vx = box.vx
         vy = box.vy
       end
-      jitterList[frame % (15 * 60) + 1] = distFromActual
+      jitterList[frame % (8 * 60) + 1] = distFromActual
       local sumOfSquares = 0
       for i = 1, #jitterList do
         local n = jitterList[i] or 0
@@ -194,11 +193,11 @@ for _, client in ipairs(network.clients) do
       end
       if sumOfSquares <= 0 then
         jitteriness = 'none'
-      elseif sumOfSquares > 600 then
+      elseif sumOfSquares > 400 then
         jitteriness = 'TONS' .. ' (' .. math.floor(sumOfSquares) .. ')'
-      elseif sumOfSquares > 300 then
+      elseif sumOfSquares > 200 then
         jitteriness = 'lots' .. ' (' .. math.floor(sumOfSquares) .. ')'
-      elseif sumOfSquares > 150 then
+      elseif sumOfSquares > 100 then
         jitteriness = 'some' .. ' (' .. math.floor(sumOfSquares) .. ')'
       else
         jitteriness = 'a bit' .. ' (' .. math.floor(sumOfSquares) .. ')'
