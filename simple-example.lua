@@ -57,8 +57,7 @@ end
 
 -- Create a client-server network for the game to run on
 local network, server, client = simulsim.createGameNetwork(game, {
-  mode = 'multiplayer',
-  exposeGameWithoutPrediction = true
+  mode = 'multiplayer'
 })
 
 -- When a client connects to the server, spawn a playable entity for them to control
