@@ -15,6 +15,7 @@ local function createInMemoryNetwork(gameDefinition, params)
   local framesBetweenFlushes = params.framesBetweenFlushes
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
   local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
+  local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction
 
   -- Keep track of transport streams
   local transportStreams = {}
@@ -57,7 +58,8 @@ local function createInMemoryNetwork(gameDefinition, params)
       gameDefinition = gameDefinition,
       conn = clientConn,
       framesBetweenFlushes = framesBetweenFlushes,
-      framesBetweenSmoothing = framesBetweenClientSmoothing
+      framesBetweenSmoothing = framesBetweenClientSmoothing,
+      exposeGameWithoutPrediction = exposeGameWithoutPrediction
     })
     table.insert(clients, client)
   end
@@ -103,6 +105,7 @@ local function createLocalhostShareNetwork(gameDefinition, params)
   local framesBetweenFlushes = params.framesBetweenFlushes
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
   local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
+  local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction
 
   -- Create the server
   local server = GameServer:new({
@@ -123,7 +126,8 @@ local function createLocalhostShareNetwork(gameDefinition, params)
       port = port
     }),
     framesBetweenFlushes = framesBetweenFlushes,
-    framesBetweenSmoothing = framesBetweenClientSmoothing
+    framesBetweenSmoothing = framesBetweenClientSmoothing,
+      exposeGameWithoutPrediction = exposeGameWithoutPrediction
   })
 
   -- Return a localhost network that uses share.lua
@@ -156,6 +160,7 @@ local function createServerSideShareNetwork(gameDefinition, params)
   local framesBetweenFlushes = params.framesBetweenFlushes
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
   local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
+  local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction
 
   -- Create the server
   local server = GameServer:new({
@@ -198,6 +203,7 @@ local function createClientSideShareNetwork(gameDefinition, params)
   local framesBetweenFlushes = params.framesBetweenFlushes
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
   local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
+  local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction
 
   -- Create a fake server
   local server = EmptyGameServer:new()
@@ -209,7 +215,8 @@ local function createClientSideShareNetwork(gameDefinition, params)
       isLocalhost = false
     }),
     framesBetweenFlushes = framesBetweenFlushes,
-    framesBetweenSmoothing = framesBetweenClientSmoothing
+    framesBetweenSmoothing = framesBetweenClientSmoothing,
+    exposeGameWithoutPrediction = exposeGameWithoutPrediction
   })
 
   -- Return a localhost network that uses share.lua
