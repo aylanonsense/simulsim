@@ -73,7 +73,7 @@ function ServerSideGameClient:new(params)
         self._messageServer:flush(self._connId)
       end
     end,
-    _sendEvent = function(self, event, params)
+    _sendEvent = function(self, event)
       self._messageServer:buffer(self._connId, { 'event', event })
       if self._framesBetweenFlushes <= 0 then
         self._messageServer:flush(self._connId)
@@ -110,7 +110,7 @@ function GameServer:new(params)
     game = gameDefinition:new(),
     isRenderable = false,
     allowTimeManipulation = false,
-    framesOfHistory = maxClientEventFramesLate + 1
+    framesOfHistory = 0
   })
 
   -- Wrap the listener in a message server to make it easier to work with
@@ -144,6 +144,7 @@ function GameServer:new(params)
     end,
     -- Gets a client with the given id
     getClientById = function(self, clientId)
+      -- TODO
       for _, client in ipairs(self._clients) do
         if client.clientId == clientId then
           return client
@@ -156,6 +157,7 @@ function GameServer:new(params)
     end,
     -- Fires an event for the game and lets all clients know
     fireEvent = function(self, eventType, eventData, params)
+      -- TODO
       -- Create an event
       local event = self:_addServerMetadata({
         id = 'server-' .. stringUtils.generateRandomString(10),
@@ -199,6 +201,7 @@ function GameServer:new(params)
       return true
     end,
     generateStateSnapshotForClient = function(self, client)
+      -- TODO
       return tableUtils.cloneTable(self.game:getState())
     end,
 
@@ -209,6 +212,7 @@ function GameServer:new(params)
 
     -- Private methods
     _getClientByConnId = function(self, connId)
+      -- TODO
       for i = 1, #self._clients do
         if self._clients[i]._connId == connId then
           return self._clients[i], i
@@ -239,6 +243,7 @@ function GameServer:new(params)
         -- Insert the client into the list of clients
         table.insert(self._clients, client)
         -- Accept the connection
+        -- TODO
         accept({ clientId, clientData or {}, self:generateStateSnapshotForClient(client) })
         -- Trigger connect callbacks
         for _, callback in ipairs(self._connectCallbacks) do
@@ -262,11 +267,12 @@ function GameServer:new(params)
       end
     end,
     _handleReceive = function(self, connId, messageType, messageContent)
+      -- TODO
       local client = self:_getClientByConnId(connId)
       if client then
         if messageType == 'event' then
           -- Add some metadata onto the event recording the fact that it was received
-          local event = self:_addServerMetadata(messageContent)
+          local event = self:_addServerMetadata(messageContent) -- TODO
           local eventApplied = false
           local rejectReason
           if self:shouldAcceptEventFromClient(client, event) then
@@ -282,7 +288,7 @@ function GameServer:new(params)
               end
             end
             local isTooEarly = (frameOffset > maxFramesEarly)
-            local isTooLate = ((-frameOffset) > maxFramesLate)
+            local isTooLate = (-frameOffset > maxFramesLate)
             if not isTooEarly and not isTooLate then
               if event.isInputEvent and event.type == 'set-inputs' and self.game.frameOfLastInput[client.clientId] and self.game.frameOfLastInput[client.clientId] > event.frame then
                 logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because newer inputs have already been applied [frame=' .. self.game.frame .. ']')
