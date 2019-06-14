@@ -11,6 +11,24 @@ local function cloneTable(obj)
   end
 end
 
+-- Clears all the properties off of an object
+local function clearProps(obj)
+  for k,v in pairs(obj) do
+    obj[k] = nil
+  end
+  return obj
+end
+
+-- Copies all properties from the source object to the target object
+local function copyProps(sourceObj, targetObj)
+  for k, v in pairs(sourceObj) do
+    targetObj[k] = cloneTable(v)
+  end
+  return targetObj
+end
+
 return {
-  cloneTable = cloneTable
+  cloneTable = cloneTable,
+  clearProps = clearProps,
+  copyProps = copyProps
 }

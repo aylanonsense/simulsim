@@ -10,6 +10,8 @@ function Game:new(params)
     -- Private vars
     _entityIdPrefix = '',
     _nextEntityId = 1,
+    _entityIndex = {},
+    _reusedStateObj = { entities = {} },
 
     -- Public vars
     frame = 0,
@@ -21,60 +23,50 @@ function Game:new(params)
     -- Public methods
     -- Gets the current state of the game as a simple table
     getState = function(self)
-      local state = {
-        frame = self.frame,
-        entities = {},
-        data = tableUtils.cloneTable(self.data),
-        inputs = tableUtils.cloneTable(self.inputs),
-        frameOfLastInput = tableUtils.cloneTable(self.frameOfLastInput)
-      }
+      self._reusedStateObj.frame = self.frame
+      tableUtils.clearProps(self._reusedStateObj.entities)
+      self._reusedStateObj.data = self.data
+      self._reusedStateObj.inputs = self.inputs
+      self._reusedStateObj.frameOfLastInput = self.frameOfLastInput
       for _, entity in ipairs(self.entities) do
-        table.insert(state.entities, tableUtils.cloneTable(self:serializeEntity(entity)))
+        table.insert(self._reusedStateObj.entities, self:serializeEntity(entity))
       end
-      return state
+      return self._reusedStateObj
     end,
     -- Sets the current state of the game
     setState = function(self, state)
       self.frame = state.frame or self.frame
       if state.entities then
-        self.entities = {}
+        tableUtils.clearProps(self._entityIndex)
+        tableUtils.clearProps(self.entities)
         for _, entityState in ipairs(state.entities) do
-          table.insert(self.entities, self:deserializeEntity(tableUtils.cloneTable(entityState)))
+          local entity = self:deserializeEntity(entityState)
+          self._entityIndex[self:getEntityId(entity)] = entity
+          table.insert(self.entities, entity)
         end
       end
       if state.data then
-        self.data = tableUtils.cloneTable(state.data)
+        self.data = state.data
       end
       if state.inputs then
-        self.inputs = tableUtils.cloneTable(state.inputs)
+        self.inputs = state.inputs
       end
       if state.frameOfLastInput then
-        self.frameOfLastInput = tableUtils.cloneTable(state.frameOfLastInput)
+        self.frameOfLastInput = state.frameOfLastInput
       end
     end,
-    -- Creates another game identical to this one
-    clone = function(self)
-      -- Create a new game
-      local clonedGame = Game:new()
-      -- Copy all properties and methods
-      for k, v in pairs(self) do
-        clonedGame[k] = v
-      end
-      -- Set the new game's state
-      clonedGame:setState(self:getState())
-      -- Return the newly-cloned game
-      return clonedGame
+    cloneEntity = function(self, entity)
+      return self:deserializeEntity(tableUtils.cloneTable(self:serializeEntity(entity)))
+    end,
+    copyEntityProps = function(self, sourceEntity, targetEntity)
+      return tableUtils.copyProps(sourceEntity, tableUtils.clearProps(targetEntity))
     end,
     getInputsForClient = function(self, clientId)
       return self.inputs[clientId]
     end,
     -- Gets an entity with the given id
     getEntityById = function(self, entityId)
-      for index, entity in ipairs(self.entities) do
-        if self:getEntityId(entity) == entityId then
-          return entity, index
-        end
-      end
+      return self._entityIndex[entityId]
     end,
     getEntityWhere = function(self, criteria)
       for index, entity in ipairs(self.entities) do
@@ -157,6 +149,7 @@ function Game:new(params)
         self:setEntityId(entity, self:generateEntityId())
       end
       -- Add the entity to the game
+      self._entityIndex[self:getEntityId(entity)] = entity
       table.insert(self.entities, entity)
       return entity
     end,
@@ -164,6 +157,7 @@ function Game:new(params)
     despawnEntity = function(self, entity)
       if entity then
         local id = self:getEntityId(entity)
+        self._entityIndex[id] = nil
         for i = #self.entities, 1, -1 do
           if self:getEntityId(self.entities[i]) == id then
             table.remove(self.entities, i)
@@ -175,10 +169,11 @@ function Game:new(params)
     reset = function(self)
       self:resetEntityIdGeneration()
       self.frame = 0
-      self.entities = {}
-      self.data = {}
-      self.inputs = {}
-      self.frameOfLastInput = {}
+      tableUtils.clearProps(self._entityIndex)
+      tableUtils.clearProps(self.entities)
+      tableUtils.clearProps(self.data)
+      tableUtils.clearProps(self.inputs)
+      tableUtils.clearProps(self.frameOfLastInput)
     end,
     resetEntityIdGeneration = function(self, prefix)
       self._entityIdPrefix = prefix or ''
@@ -204,7 +199,7 @@ function Game:new(params)
     end,
     -- Transforms a simple state object into a fully-hydrated entity
     deserializeEntity = function(self, state)
-      return tableUtils.cloneTable(state)
+      return state
     end,
     isSyncEnabledForEntity = function(self, entity)
       if entity._metadata then
@@ -243,6 +238,22 @@ function Game:new(params)
           end
         end
       end
+    end,
+    reindexEntity = function(self, entity)
+      self._entityIndex[self:getEntityId(entity)] = entity
+    end,
+    reindexEntities = function(self, index)
+      if index then
+        self._entityIndex = index
+      else
+        tableUtils.clearProps(self._entityIndex)
+        for _, entity in ipairs(self.entities) do
+          self:reindexEntity(entity)
+        end
+      end
+    end,
+    unindexEntityId = function(self, entityId)
+      self._entityIndex[entityId] = nil
     end,
 
     -- Methods to override

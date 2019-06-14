@@ -11,8 +11,8 @@ function ServerSideGameClient:new(params)
   local server = params.server
   local clientId = params.clientId
   local connId = params.connId
-  local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenSnapshots = params.framesBetweenSnapshots or 35
+  local framesBetweenFlushes = params.framesBetweenFlushes
+  local framesBetweenSnapshots = params.framesBetweenSnapshots
 
   return {
     -- Private vars
@@ -73,15 +73,15 @@ function ServerSideGameClient:new(params)
         self._messageServer:flush(self._connId)
       end
     end,
-    _sendEvent = function(self, event, params)
+    _sendEvent = function(self, event)
       self._messageServer:buffer(self._connId, { 'event', event })
       if self._framesBetweenFlushes <= 0 then
         self._messageServer:flush(self._connId)
       end
     end,
     -- Rejects an event that came from this client
-    _rejectEvent = function(self, event)
-      self._messageServer:buffer(self._connId, { 'reject-event', event })
+    _rejectEvent = function(self, event, reason)
+      self._messageServer:buffer(self._connId, { 'reject-event', { event, reason } })
       if self._framesBetweenFlushes <= 0 then
         self._messageServer:flush(self._connId)
       end
@@ -101,15 +101,16 @@ function GameServer:new(params)
   local listener = params.listener
   local gameDefinition = params.gameDefinition
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
-  local framesBetweenSnapshots = params.framesBetweenSnapshots or 35
+  local framesBetweenSnapshots = params.framesBetweenSnapshots or 46
   local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
 
   -- Create the game
   local runner = GameRunner:new({
     game = gameDefinition:new(),
-    framesOfHistory = maxClientEventFramesLate + 1,
-    isRenderable = false
+    isRenderable = false,
+    allowTimeManipulation = false,
+    framesOfHistory = 0
   })
 
   -- Wrap the listener in a message server to make it easier to work with
@@ -167,9 +168,6 @@ function GameServer:new(params)
       -- Return the event
       return event
     end,
-    getGame = function(self)
-      return self.game
-    end,
     update = function(self, dt)
       -- Update the underlying messaging server
       self._messageServer:update(dt)
@@ -201,7 +199,7 @@ function GameServer:new(params)
       return true
     end,
     generateStateSnapshotForClient = function(self, client)
-      return self.game:getState()
+      return tableUtils.cloneTable(self.game:getState())
     end,
 
     -- Callback methods
@@ -270,6 +268,7 @@ function GameServer:new(params)
           -- Add some metadata onto the event recording the fact that it was received
           local event = self:_addServerMetadata(messageContent)
           local eventApplied = false
+          local rejectReason
           if self:shouldAcceptEventFromClient(client, event) then
             local frameOffset = event.frame - self.game.frame - 1 -- positive is early, negative is late
             local maxFramesEarly = self._maxClientEventFramesEarly
@@ -283,10 +282,11 @@ function GameServer:new(params)
               end
             end
             local isTooEarly = (frameOffset > maxFramesEarly)
-            local isTooLate = ((-frameOffset) > maxFramesLate)
+            local isTooLate = (-frameOffset > maxFramesLate)
             if not isTooEarly and not isTooLate then
               if event.isInputEvent and event.type == 'set-inputs' and self.game.frameOfLastInput[client.clientId] and self.game.frameOfLastInput[client.clientId] > event.frame then
                 logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because newer inputs have already been applied [frame=' .. self.game.frame .. ']')
+                rejectReason = 'Newer inputs have already been applied'
               else
                 event.serverMetadata.proposedEventFrame = event.frame
                 -- Apply the event server-side and let all clients know about it
@@ -297,15 +297,19 @@ function GameServer:new(params)
                 eventApplied = self:_applyEvent(event)
                 if not eventApplied then
                   logger.silly('Server failed to apply "' .. event.type .. '" event from client ' .. client.clientId .. ' [frame=' .. self.game.frame .. ']')
+                  rejectReason = 'Failed to apply event'
                 end
               end
             else
-              logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because it was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'too early' or 'too late') .. ' [frame=' .. self.game.frame .. ']')
+              logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because it was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'early' or 'late') .. ' [frame=' .. self.game.frame .. ']')
+              rejectReason = 'Event was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'early' or 'late')
             end
+          else
+            rejectReason = 'Server decided not to accept events from client'
           end
           if not eventApplied then
             -- Let the client know that their event was rejected or wasn't able to be applied
-            client:_rejectEvent(event)
+            client:_rejectEvent(event, rejectReason)
           end
         elseif messageType == 'ping' then
           local pingResponse = self:_addServerMetadata(messageContent)
