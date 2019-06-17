@@ -180,7 +180,6 @@ function GameClient:new(params)
     end,
     moveForwardOneFrame = function(self, dt)
       self._clientFrame = self._clientFrame + 1
-      self._latencyGuesstimator:moveForwardOneFrame(dt)
       -- Update the game (via the game runner)
       self._runner:moveForwardOneFrame(dt)
       self._runnerWithoutSmoothing:moveForwardOneFrame(dt)
@@ -474,17 +473,17 @@ function GameClient:new(params)
       if event.serverMetadata and event.serverMetadata.proposedEventFrame then
         preservedFrameAdjustment = event.frame - event.serverMetadata.proposedEventFrame
       end
-      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
+      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata, 'event')
       self:_applyEvent(event, { preservedFrameAdjustment = preservedFrameAdjustment })
     end,
     _handleRejectEvent = function(self, event, reason)
       logger.debug('Client ' .. self.clientId .. ' "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server: ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
-      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
+      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata, 'rejection')
       self:_unapplyEvent(event)
     end,
     _handlePingResponse = function(self, ping)
       self:_recordTimeOffset(ping.frame)
-      self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata)
+      self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata, 'ping')
     end,
     _syncToTargetGame = function(self, sourceGame, targetGame, isPrediction)
       local entityIndex = {}
@@ -638,11 +637,9 @@ function GameClient:new(params)
         self._timeSyncOptimizer:recordOffset(frame - self.gameWithoutSmoothing.frame - 1)
       end
     end,
-    _recordLatencyOffset = function(self, clientMetadata, serverMetadata)
-      if clientMetadata and clientMetadata.clientId == self.clientId and clientMetadata.clientTimeSent and clientMetadata.clientFrameSent then
-        local latency = self._clientTime - clientMetadata.clientTimeSent
-        local framesOfLatency = self._clientFrame - clientMetadata.clientFrameSent
-        self._latencyGuesstimator:record(latency, framesOfLatency)
+    _recordLatencyOffset = function(self, clientMetadata, serverMetadata, type)
+      if clientMetadata and clientMetadata.clientId == self.clientId and clientMetadata.clientTimeSent then
+        self._latencyGuesstimator:record(self._clientTime - clientMetadata.clientTimeSent, type)
       end
       if clientMetadata and clientMetadata.clientId == self.clientId and serverMetadata and serverMetadata.frame then
         -- Figure out when we'd expect the packet to arrive if it had been sent with current network conditions

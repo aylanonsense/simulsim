@@ -4,7 +4,7 @@
 -- Load simulsim as a dependency (you should use a GitHub url for a specific commit)
 local simulsim = require 'simulsim'
 
-local latency = 250
+local latency = 450
 
 -- Create the exact same game as seen in simple.lua
 local game = simulsim.defineGame()
@@ -40,7 +40,8 @@ end
 -- This lets you preview what your game will look like once it's fully deployed to a remote server!
 local network, server = simulsim.createGameNetwork(game, {
   mode = 'development',
-  numClients = 1
+  numClients = 1,
+  framesBetweenFlushes = 0
 })
 
 -- Set up the exact same server as seen in simple.lua
@@ -65,7 +66,7 @@ for clientIndex, client in ipairs(network.clients) do
   function client.load()
     client.simulateNetworkConditions({
       latency = latency,
-      latencyDeviation = 50,
+      latencyDeviation = 60,
       latencySpikeChance = 0.00,
       packetLossChance = 0.00
     })
@@ -97,10 +98,10 @@ for clientIndex, client in ipairs(network.clients) do
     elseif not isLeftPlayer and key == '-' then
       client.disconnect()
     elseif key == 'lshift' then
-      latency = latency - 50
+      latency = latency - 25
       client.simulateNetworkConditions({ latency = latency })
     elseif key == 'rshift' then
-      latency = latency + 50
+      latency = latency + 25
       client.simulateNetworkConditions({ latency = latency })
     end
   end
@@ -113,6 +114,7 @@ for clientIndex, client in ipairs(network.clients) do
     -- Clear the screen
     love.graphics.setColor(client.game.data.backgroundColor)
     love.graphics.rectangle('fill', 0, 0, 400, 400)
+    client.drawNetworkStats(10, 30, 380, 160)
     -- Draw each entity
     if client.isConnected() then
       for _, entity in ipairs(client.game.entities) do
@@ -131,6 +133,5 @@ for clientIndex, client in ipairs(network.clients) do
     else
       love.graphics.print('Connected! Frames of latency: ' .. client.getFramesOfLatency(), 3, 3)
     end
-    client.drawNetworkStats(10, 30, 380, 50)
   end
 end
