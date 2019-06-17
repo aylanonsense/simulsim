@@ -170,7 +170,7 @@ function GameClient:new(params)
       params.isInputEvent = true
       params.maxFramesLate = params.maxFramesLate or 3
       params.maxFramesEarly = params.maxFramesEarly or 30
-      if self._framesSinceSetInputs >= 12 or not self._cullRedundantEvents or not tableUtils.isEquivalent(inputs, self.game:getInputsForClient(self.clientId)) end
+      if self._framesSinceSetInputs >= 12 or not self._cullRedundantEvents or not tableUtils.isEquivalent(inputs, self.game:getInputsForClient(self.clientId)) then
         self._framesSinceSetInputs = 0
         return self:fireEvent('set-inputs', {
           clientId = self.clientId,
