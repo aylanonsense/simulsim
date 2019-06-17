@@ -2,10 +2,10 @@ local LatencyGuesstimator = {}
 
 local FONT
 local LATENCY_WINDOW = 20.00
+local MAX_RELUCTANCE = 20.00
 local LOWER_LATENCY_WEIGHT = 0.55
 local RAISE_LATENCY_WEIGHT = 0.15
-local RELUCTANCE_INCREMENT = 6.00
-local MAX_RELUCTANCE = 10.00
+local RELUCTANCE_MULT = 5.00
 
 function LatencyGuesstimator:new(params)
   params = params or {}
@@ -68,7 +68,7 @@ function LatencyGuesstimator:new(params)
         self._bestLowerLatency = lowerLatency
         self._bestLowerLatencyDuration = lowerLatencyDuration
       end
-      if self._bestHigherLatency and self._bestHigherLatencyDuration > 0.50 and (self._bestHigherLatency + 0.001 - latency) * self._bestHigherLatencyDuration > RAISE_LATENCY_WEIGHT * (1 + 2 * self._reluctance / MAX_RELUCTANCE) then
+      if self._bestHigherLatency and self._bestHigherLatencyDuration > 0.50 and (self._bestHigherLatency + 0.001 - latency) * self._bestHigherLatencyDuration > RAISE_LATENCY_WEIGHT * (1 + RELUCTANCE_MULT * self._reluctance / MAX_RELUCTANCE) then
         if self._spikeQuota >= 1.00 then
           bestHigherLatencyRecord.isAnomaly = true
           self._spikeQuota = self._spikeQuota - 1.00
@@ -77,7 +77,7 @@ function LatencyGuesstimator:new(params)
           self._bestHigherLatency = nil
           self._bestHigherLatencyDuration = nil
         end
-      elseif self._bestLowerLatency and self._bestLowerLatencyDuration > 1.00 and (self._bestLowerLatencyDuration >= LATENCY_WINDOW - 0.50 or (latency - self._bestLowerLatency) * self._bestLowerLatencyDuration > LOWER_LATENCY_WEIGHT * (1 + 2 * self._reluctance / MAX_RELUCTANCE)) then
+      elseif self._bestLowerLatency and self._bestLowerLatencyDuration > 1.00 and (self._bestLowerLatencyDuration >= LATENCY_WINDOW - 0.50 or (latency - self._bestLowerLatency) * self._bestLowerLatencyDuration > LOWER_LATENCY_WEIGHT * (1 + RELUCTANCE_MULT * self._reluctance / MAX_RELUCTANCE)) then
         if latency - self._bestLowerLatency > 0.008 then
           self:_setLatency(self._bestLowerLatency)
           self._bestLowerLatency = nil
@@ -177,8 +177,8 @@ function LatencyGuesstimator:new(params)
       local yStep = (height - 7.5 * numYLabels) / (numYLabels - 1)
       local maxLabelLength = #('' .. maxYValue)
       -- Draw the area that would be claimed by lowering latency
-      love.graphics.setColor(0.35, 0.35, 0.2)
       if self._bestLowerLatency then
+        love.graphics.setColor(0.33, 0.33, 0.2)
         local right = x + width
         local left = right - (width - 5 * maxLabelLength - 3) * (self._bestLowerLatencyDuration / LATENCY_WINDOW)
         local top = y + height - (height - 5) * 1000 * self:getLatency() / maxYValue
@@ -186,8 +186,8 @@ function LatencyGuesstimator:new(params)
         love.graphics.rectangle('fill', left, top, right - left, bottom - top)
       end
       -- Draw the area that is lost by not raising latency
-      love.graphics.setColor(0.5, 0.2, 0.2)
       if self._bestHigherLatency then
+        love.graphics.setColor(0.4, 0.25, 0.2)
         local right = x + width
         local left = right - (width - 5 * maxLabelLength - 3) * (self._bestHigherLatencyDuration / LATENCY_WINDOW)
         local top = y + height - (height - 5) * 1000 * self._bestHigherLatency / maxYValue
@@ -209,7 +209,7 @@ function LatencyGuesstimator:new(params)
           local recordX = x + width - (width - 5 * maxLabelLength - 3) * ((self._time - record.time) / LATENCY_WINDOW)
           local recordY = y + height - h
           if record.isAnomaly then
-            love.graphics.setColor(0.6, 0.6, 0.6)
+            love.graphics.setColor(0.5, 0.5, 0.5)
           elseif record.type == 'rejection' then
             love.graphics.setColor(0.8, 0.3, 0.3)
           else
@@ -241,7 +241,7 @@ function LatencyGuesstimator:new(params)
         latency = latency
       })
       self._lastLatencyChangeTime = self._time
-      self._reluctance = math.min(self._reluctance + RELUCTANCE_INCREMENT, MAX_RELUCTANCE)
+      self._reluctance = MAX_RELUCTANCE
     end,
     record = function(self, latency, type)
       table.insert(self._latencyHistory, { time = self._time, latency = latency, type = type })
