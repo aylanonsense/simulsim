@@ -2,6 +2,7 @@
 local MessageClient = require 'src/client-server/MessageClient'
 local GameRunner = require 'src/game/GameRunner'
 local OffsetOptimizer = require 'src/transport/OffsetOptimizer'
+local latencyGuesstimator = require 'src/transport/LatencyGuesstimator'
 local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
@@ -52,6 +53,7 @@ function GameClient:new(params)
     minOffsetBeforeImmediateCorrection = 0,
     maxOffsetBeforeImmediateCorrection = 20
   })
+  local latencyGuesstimator = latencyGuesstimator:new()
 
   -- Wrap the raw connection in a message client to make it easier to work with
   local messageClient = MessageClient:new({ conn = conn })
@@ -62,6 +64,7 @@ function GameClient:new(params)
     _runnerWithoutSmoothing = runnerWithoutSmoothing,
     _runnerWithoutPrediction = runnerWithoutPrediction,
     _gameDefinition = gameDefinition,
+    _clientTime = 0.00,
     _clientFrame = 0,
     _hasSetInitialState = false,
     _hasStabilizedTimeOffset = false,
@@ -71,6 +74,7 @@ function GameClient:new(params)
     _messageClient = messageClient,
     _timeSyncOptimizer = timeSyncOptimizer,
     _latencyOptimizer = latencyOptimizer,
+    _latencyGuesstimator = latencyGuesstimator,
     _framesOfLatency = 0,
     _framesUntilNextFlush = framesBetweenFlushes,
     _framesUntilNextPing = framesBetweenPings,
@@ -169,8 +173,10 @@ function GameClient:new(params)
       }, params)
     end,
     update = function(self, dt)
+      self._clientTime = self._clientTime + dt
       -- Update the underlying messaging client
       self._messageClient:update(dt)
+      self._latencyGuesstimator:update(dt)
     end,
     moveForwardOneFrame = function(self, dt)
       self._clientFrame = self._clientFrame + 1
@@ -302,6 +308,9 @@ function GameClient:new(params)
       if self._framesBetweenSmoothing <= 0 or self._clientFrame % self._framesBetweenSmoothing == 0 then
         self:_smoothGame()
       end
+    end,
+    drawNetworkStats = function(self, x, y, width, height)
+      self._latencyGuesstimator:draw(x, y, width, height)
     end,
     simulateNetworkConditions = function(self, params)
       self._messageClient:simulateNetworkConditions(params)
@@ -464,17 +473,17 @@ function GameClient:new(params)
       if event.serverMetadata and event.serverMetadata.proposedEventFrame then
         preservedFrameAdjustment = event.frame - event.serverMetadata.proposedEventFrame
       end
-      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
+      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata, 'event')
       self:_applyEvent(event, { preservedFrameAdjustment = preservedFrameAdjustment })
     end,
     _handleRejectEvent = function(self, event, reason)
       logger.debug('Client ' .. self.clientId .. ' "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server: ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
-      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata)
+      self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata, 'rejection')
       self:_unapplyEvent(event)
     end,
     _handlePingResponse = function(self, ping)
       self:_recordTimeOffset(ping.frame)
-      self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata)
+      self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata, 'ping')
     end,
     _syncToTargetGame = function(self, sourceGame, targetGame, isPrediction)
       local entityIndex = {}
@@ -618,6 +627,7 @@ function GameClient:new(params)
     _addClientMetadata = function(self, obj)
       obj.clientMetadata = {
         clientId = self.clientId,
+        clientTimeSent = self._clientTime,
         clientFrameSent = self._clientFrame
       }
       return obj
@@ -627,7 +637,10 @@ function GameClient:new(params)
         self._timeSyncOptimizer:recordOffset(frame - self.gameWithoutSmoothing.frame - 1)
       end
     end,
-    _recordLatencyOffset = function(self, clientMetadata, serverMetadata)
+    _recordLatencyOffset = function(self, clientMetadata, serverMetadata, type)
+      if clientMetadata and clientMetadata.clientId == self.clientId and clientMetadata.clientTimeSent then
+        self._latencyGuesstimator:record(self._clientTime - clientMetadata.clientTimeSent, type)
+      end
       if clientMetadata and clientMetadata.clientId == self.clientId and serverMetadata and serverMetadata.frame then
         -- Figure out when we'd expect the packet to arrive if it had been sent with current network conditions
         local timeOffsetNow = self.gameWithoutSmoothing.frame - self._clientFrame
