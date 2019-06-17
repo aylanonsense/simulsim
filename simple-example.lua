@@ -42,7 +42,7 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 -- Create a client-server network for the game to run on
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'development' })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer' })
 
 -- When a client connects to the server, spawn a playable entity for them to control
 function server.clientconnected(client)
