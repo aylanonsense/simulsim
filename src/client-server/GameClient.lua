@@ -19,6 +19,7 @@ function GameClient:new(params)
   local maxFramesOfLatency = params.maxFramesOfLatency or 180
   local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 21
   local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction == true
+  local cullRedundantEvents = params.cullRedundantEvents ~= false
 
   -- Create a game for the client and a runner for it
   local runner = GameRunner:new({
@@ -71,11 +72,13 @@ function GameClient:new(params)
     _hasStabilizedLatency = false,
     _framesOfStableTimeOffset = 0,
     _framesOfStableLatency = 0,
+    _cullRedundantEvents = cullRedundantEvents,
     _messageClient = messageClient,
     _timeSyncOptimizer = timeSyncOptimizer,
     _latencyOptimizer = latencyOptimizer,
     _latencyGuesstimator = latencyGuesstimator,
     _framesOfLatency = 0,
+    _framesSinceSetInputs = 0,
     _framesUntilNextFlush = framesBetweenFlushes,
     _framesUntilNextPing = framesBetweenPings,
     _framesBetweenFlushes = framesBetweenFlushes,
@@ -167,10 +170,13 @@ function GameClient:new(params)
       params.isInputEvent = true
       params.maxFramesLate = params.maxFramesLate or 3
       params.maxFramesEarly = params.maxFramesEarly or 30
-      return self:fireEvent('set-inputs', {
-        clientId = self.clientId,
-        inputs = inputs
-      }, params)
+      if self._framesSinceSetInputs >= 12 or not self._cullRedundantEvents or not tableUtils.isEquivalent(inputs, self.game:getInputsForClient(self.clientId)) end
+        self._framesSinceSetInputs = 0
+        return self:fireEvent('set-inputs', {
+          clientId = self.clientId,
+          inputs = inputs
+        }, params)
+      end
     end,
     update = function(self, dt)
       self._clientTime = self._clientTime + dt
@@ -180,6 +186,7 @@ function GameClient:new(params)
     end,
     moveForwardOneFrame = function(self, dt)
       self._clientFrame = self._clientFrame + 1
+      self._framesSinceSetInputs = self._framesSinceSetInputs + 1
       -- Update the game (via the game runner)
       self._runner:moveForwardOneFrame(dt)
       self._runnerWithoutSmoothing:moveForwardOneFrame(dt)

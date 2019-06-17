@@ -1,9 +1,9 @@
 local LatencyGuesstimator = {}
 
 local FONT
-local LATENCY_WINDOW = 15.00
-local LOWER_LATENCY_WEIGHT = 0.3
-local RAISE_LATENCY_WEIGHT = 0.07
+local LATENCY_WINDOW = 17.00
+local LOWER_LATENCY_WEIGHT = 0.35
+local RAISE_LATENCY_WEIGHT = 0.09
 
 function LatencyGuesstimator:new(params)
   params = params or {}
@@ -21,7 +21,7 @@ function LatencyGuesstimator:new(params)
     -- _reluctance = 0.00,
     update = function(self, dt)
       self._time = self._time + dt
-      self._spikeQuota = math.min(3, self._spikeQuota + dt / 5.00)
+      self._spikeQuota = math.min(3, self._spikeQuota + dt / 6.00)
       -- self._reluctance = math.max(0, self._reluctance - dt - 0.01 * self._reluctance)
       local latency = self:getLatency()
       -- Calculate what the best latency would be to lower or raise to

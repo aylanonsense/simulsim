@@ -27,8 +27,33 @@ local function copyProps(sourceObj, targetObj)
   return targetObj
 end
 
+-- Returns true if the tables are equivalent, false otherwie
+local function isEquivalent(obj1, obj2)
+  local type1, type2 = type(obj1), type(obj2)
+  if type1 == type2 then
+    if type1 == 'table' then
+      for k, v in pairs(obj1) do
+        if not isEquivalent(v, obj2[k]) then
+          return false
+        end
+      end
+      for k, v in pairs(obj2) do
+        if obj1[k] == nil then
+          return false
+        end
+      end
+      return true
+    else
+      return obj1 == obj2
+    end
+  else
+    return false
+  end
+end
+
 return {
   cloneTable = cloneTable,
   clearProps = clearProps,
-  copyProps = copyProps
+  copyProps = copyProps,
+  isEquivalent = isEquivalent
 }
