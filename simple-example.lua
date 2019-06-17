@@ -61,12 +61,12 @@ end
 
 -- Every frame the client tells the server which buttons it's pressing
 function client.update(dt)
-  client.setInputs({
-    up = love.keyboard.isDown('w') or love.keyboard.isDown('up'),
-    left = love.keyboard.isDown('a') or love.keyboard.isDown('left'),
-    down = love.keyboard.isDown('s') or love.keyboard.isDown('down'),
-    right = love.keyboard.isDown('d') or love.keyboard.isDown('right')
-  })
+  -- client.setInputs({
+  --   up = love.keyboard.isDown('w') or love.keyboard.isDown('up'),
+  --   left = love.keyboard.isDown('a') or love.keyboard.isDown('left'),
+  --   down = love.keyboard.isDown('s') or love.keyboard.isDown('down'),
+  --   right = love.keyboard.isDown('d') or love.keyboard.isDown('right')
+  -- })
 end
 
 -- Draw the game for each client

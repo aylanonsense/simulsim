@@ -285,7 +285,7 @@ function GameClient:new(params)
         -- Send a lazy ping every so often to gauge latency accuracy
         self._framesUntilNextPing = self._framesUntilNextPing - 1
         if self._framesUntilNextPing <= 0 then
-          self._framesUntilNextPing = isStable and self._framesBetweenPings or 2
+          self._framesUntilNextPing = self._framesBetweenPings
           self:_ping()
         end
       end
