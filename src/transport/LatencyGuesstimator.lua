@@ -1,6 +1,6 @@
 local LatencyGuesstimator = {}
 
-local FONT = love.graphics.newFont(8)
+local FONT
 local LATENCY_WINDOW = 12.00
 local LOWER_LATENCY_WEIGHT = 0.2
 local RAISE_LATENCY_WEIGHT = 0.05
@@ -102,6 +102,9 @@ function LatencyGuesstimator:new(params)
       -- Remember what graphics we started with
       local font = love.graphics.getFont()
       local r, g, b, a = love.graphics.getColor()
+      if not FONT then
+        FONT = love.graphics.newFont(8)
+      end
       love.graphics.setFont(FONT)
       -- Draw background
       love.graphics.setColor(0.2, 0.2, 0.2)

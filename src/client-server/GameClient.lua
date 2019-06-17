@@ -2,7 +2,7 @@
 local MessageClient = require 'src/client-server/MessageClient'
 local GameRunner = require 'src/game/GameRunner'
 local OffsetOptimizer = require 'src/transport/OffsetOptimizer'
-local latencyGuesstimator = require 'src/transport/LatencyGuesstimator'
+local LatencyGuesstimator = require 'src/transport/LatencyGuesstimator'
 local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
@@ -53,7 +53,7 @@ function GameClient:new(params)
     minOffsetBeforeImmediateCorrection = 0,
     maxOffsetBeforeImmediateCorrection = 20
   })
-  local latencyGuesstimator = latencyGuesstimator:new()
+  local latencyGuesstimator = LatencyGuesstimator:new()
 
   -- Wrap the raw connection in a message client to make it easier to work with
   local messageClient = MessageClient:new({ conn = conn })
