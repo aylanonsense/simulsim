@@ -9,7 +9,7 @@ local game = simulsim.defineGame()
 
 -- When the game is first loaded, set the background color
 function game.load(self)
-  self.data.numEventsPerSecond = 1
+  self.data.numEventsPerSecond = 30
   self.data.backgroundColor = { 0.1, 0.1, 0.1 }
 end
 
@@ -47,7 +47,7 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 -- Create a client-server network for the game to run on
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer' })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer', cullRedundantEvents = false })
 
 -- When a client connects to the server, spawn a playable entity for them to control
 function server.clientconnected(client)
