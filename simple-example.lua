@@ -42,7 +42,7 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 -- Create a client-server network for the game to run on
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer' })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'development' })
 
 -- When a client connects to the server, spawn a playable entity for them to control
 function server.clientconnected(client)
@@ -74,7 +74,7 @@ function client.draw()
   -- Clear the screen
   love.graphics.setColor(client.game.data.backgroundColor)
   love.graphics.rectangle('fill', 0, 0, 400, 400)
-  -- client.drawNetworkStats(10, 160, 380, 230)
+  client.drawNetworkStats(10, 160, 380, 230)
   -- Draw each entity
   for _, entity in ipairs(client.game.entities) do
     love.graphics.setColor(entity.color)

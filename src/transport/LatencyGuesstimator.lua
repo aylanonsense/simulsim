@@ -12,7 +12,7 @@ function LatencyGuesstimator:new(params)
     _time = 0.00,
     _lastLatencyChangeTime = 0.00,
     _latencyHistory = {},
-    _latencyGuessHistory = { { latency = 0.5, startTime = 0.00 } },
+    _latencyGuessHistory = { { latency = 0.20, startTime = 0.00 } },
     _bestLowerLatency = nil,
     _bestLowerLatencyDuration = nil,
     _bestHigherLatency = nil,
