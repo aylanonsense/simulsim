@@ -1,9 +1,11 @@
 local LatencyGuesstimator = {}
 
 local FONT
-local LATENCY_WINDOW = 17.00
-local LOWER_LATENCY_WEIGHT = 0.35
-local RAISE_LATENCY_WEIGHT = 0.09
+local LATENCY_WINDOW = 20.00
+local LOWER_LATENCY_WEIGHT = 0.55
+local RAISE_LATENCY_WEIGHT = 0.15
+local RELUCTANCE_INCREMENT = 6.00
+local MAX_RELUCTANCE = 10.00
 
 function LatencyGuesstimator:new(params)
   params = params or {}
@@ -18,11 +20,11 @@ function LatencyGuesstimator:new(params)
     _bestHigherLatency = nil,
     _bestHigherLatencyDuration = nil,
     _spikeQuota = 0.00,
-    -- _reluctance = 0.00,
+    _reluctance = 0.00,
     update = function(self, dt)
       self._time = self._time + dt
-      self._spikeQuota = math.min(3, self._spikeQuota + dt / 6.00)
-      -- self._reluctance = math.max(0, self._reluctance - dt - 0.01 * self._reluctance)
+      self._spikeQuota = math.min(3, self._spikeQuota + dt / 6.50)
+      self._reluctance = math.max(0, self._reluctance - dt)
       local latency = self:getLatency()
       -- Calculate what the best latency would be to lower or raise to
       local lowerLatency
@@ -66,7 +68,7 @@ function LatencyGuesstimator:new(params)
         self._bestLowerLatency = lowerLatency
         self._bestLowerLatencyDuration = lowerLatencyDuration
       end
-      if self._bestHigherLatency and self._bestHigherLatencyDuration > 0.50 and (self._bestHigherLatency + 0.001 - latency) * self._bestHigherLatencyDuration > RAISE_LATENCY_WEIGHT then
+      if self._bestHigherLatency and self._bestHigherLatencyDuration > 0.50 and (self._bestHigherLatency + 0.001 - latency) * self._bestHigherLatencyDuration > RAISE_LATENCY_WEIGHT * (1 + 2 * self._reluctance / MAX_RELUCTANCE) then
         if self._spikeQuota >= 1.00 then
           bestHigherLatencyRecord.isAnomaly = true
           self._spikeQuota = self._spikeQuota - 1.00
@@ -75,7 +77,7 @@ function LatencyGuesstimator:new(params)
           self._bestHigherLatency = nil
           self._bestHigherLatencyDuration = nil
         end
-      elseif self._bestLowerLatency and self._bestLowerLatencyDuration > 1.00 and (self._bestLowerLatencyDuration >= LATENCY_WINDOW - 0.50 or (latency - self._bestLowerLatency) * self._bestLowerLatencyDuration > LOWER_LATENCY_WEIGHT) then
+      elseif self._bestLowerLatency and self._bestLowerLatencyDuration > 1.00 and (self._bestLowerLatencyDuration >= LATENCY_WINDOW - 0.50 or (latency - self._bestLowerLatency) * self._bestLowerLatencyDuration > LOWER_LATENCY_WEIGHT * (1 + 2 * self._reluctance / MAX_RELUCTANCE)) then
         if latency - self._bestLowerLatency > 0.008 then
           self:_setLatency(self._bestLowerLatency)
           self._bestLowerLatency = nil
@@ -117,9 +119,9 @@ function LatencyGuesstimator:new(params)
       else
         if width >= 150 then
           love.graphics.print('Latency: ' .. latency .. 'ms (' .. framesOfLatency .. ' frames)', x + 5, y + 4)
-          -- if width >= 190 then
-          --   self:_drawReluctance(x + 150, y + 4, width - 153, 10)
-          -- end
+          if width >= 190 then
+            self:_drawReluctance(x + 150, y + 4, width - 153, 10)
+          end
           self:_drawNetworkTraffic(x + 5, y + 18, width - 8, height - 21)
         else
           love.graphics.print('Latency: ' .. latency .. 'ms', x + 5, y + 4)
@@ -131,11 +133,11 @@ function LatencyGuesstimator:new(params)
       love.graphics.setFont(font)
       love.graphics.setColor(r, g, b, a)
     end,
-    -- _drawReluctance = function(self, x, y, width, height)
-    --   love.graphics.setColor(0.35, 0.2, 0.65)
-    --   love.graphics.rectangle('line', x, y, width, height)
-    --   love.graphics.rectangle('fill', x, y, width * math.min(self._reluctance / LATENCY_WINDOW, 1.00), height)
-    -- end,
+    _drawReluctance = function(self, x, y, width, height)
+      love.graphics.setColor(0.35, 0.2, 0.65)
+      love.graphics.rectangle('line', x, y, width, height)
+      love.graphics.rectangle('fill', x, y, width * math.min(self._reluctance / MAX_RELUCTANCE, 1.00), height)
+    end,
     _drawNetworkTraffic = function(self, x, y, width, height)
       -- Figure out the maximum latency in recent history
       local maxLatency
@@ -239,7 +241,7 @@ function LatencyGuesstimator:new(params)
         latency = latency
       })
       self._lastLatencyChangeTime = self._time
-      -- self._reluctance = self._reluctance + 2.50
+      self._reluctance = math.min(self._reluctance + RELUCTANCE_INCREMENT, MAX_RELUCTANCE)
     end,
     record = function(self, latency, type)
       table.insert(self._latencyHistory, { time = self._time, latency = latency, type = type })

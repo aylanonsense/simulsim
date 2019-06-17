@@ -9,7 +9,7 @@ local game = simulsim.defineGame()
 
 -- When the game is first loaded, set the background color
 function game.load(self)
-  self.data.numEventsPerSecond = 30
+  self.data.numEventsPerSecond = 12
   self.data.backgroundColor = { 0.1, 0.1, 0.1 }
 end
 
