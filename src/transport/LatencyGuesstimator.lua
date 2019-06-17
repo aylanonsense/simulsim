@@ -21,7 +21,7 @@ function LatencyGuesstimator:new(params)
     -- _reluctance = 0.00,
     update = function(self, dt)
       self._time = self._time + dt
-      self._spikeQuota = math.min(4, self._spikeQuota + dt / 3.00)
+      self._spikeQuota = math.min(3, self._spikeQuota + dt / 5.00)
       -- self._reluctance = math.max(0, self._reluctance - dt - 0.01 * self._reluctance)
       local latency = self:getLatency()
       -- Calculate what the best latency would be to lower or raise to

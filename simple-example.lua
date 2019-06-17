@@ -9,6 +9,7 @@ local game = simulsim.defineGame()
 
 -- When the game is first loaded, set the background color
 function game.load(self)
+  self.data.numEventsPerSecond = 1
   self.data.backgroundColor = { 0.1, 0.1, 0.1 }
 end
 
@@ -38,6 +39,10 @@ function game.handleEvent(self, eventType, eventData)
   -- Despawn a player
   elseif eventType == 'despawn-player' then
     self:despawnEntity(self:getEntityWhere({ clientId = eventData.clientId }))
+  elseif eventType == 'reduce-events' then
+    self.data.numEventsPerSecond = self.data.numEventsPerSecond - 1
+  elseif eventType == 'increase-events' then
+    self.data.numEventsPerSecond = self.data.numEventsPerSecond + 1
   end
 end
 
@@ -59,14 +64,24 @@ function server.clientdisconnected(client)
   server.fireEvent('despawn-player', { clientId = client.clientId })
 end
 
+function client.load()
+  client.timeSinceInputs = 0.00
+end
+
 -- Every frame the client tells the server which buttons it's pressing
 function client.update(dt)
-  -- client.setInputs({
-  --   up = love.keyboard.isDown('w') or love.keyboard.isDown('up'),
-  --   left = love.keyboard.isDown('a') or love.keyboard.isDown('left'),
-  --   down = love.keyboard.isDown('s') or love.keyboard.isDown('down'),
-  --   right = love.keyboard.isDown('d') or love.keyboard.isDown('right')
-  -- })
+  if client.isConnected() and client.game.data.numEventsPerSecond > 0 then
+    client.timeSinceInputs = client.timeSinceInputs + dt
+    while client.timeSinceInputs > 1 / client.game.data.numEventsPerSecond do
+      client.timeSinceInputs = client.timeSinceInputs - 1 / client.game.data.numEventsPerSecond
+      client.setInputs({
+        up = love.keyboard.isDown('w') or love.keyboard.isDown('up'),
+        left = love.keyboard.isDown('a') or love.keyboard.isDown('left'),
+        down = love.keyboard.isDown('s') or love.keyboard.isDown('down'),
+        right = love.keyboard.isDown('d') or love.keyboard.isDown('right')
+      })
+    end
+  end
 end
 
 -- Draw the game for each client
@@ -79,5 +94,15 @@ function client.draw()
   for _, entity in ipairs(client.game.entities) do
     love.graphics.setColor(entity.color)
     love.graphics.rectangle('fill', entity.x, entity.y, entity.width, entity.height)
+  end
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.print(client.game.data.numEventsPerSecond, 10, 10)
+end
+
+function client.keypressed(key)
+  if key == 'lshift' then
+    client.fireEvent('reduce-events')
+  elseif key == 'rshift' then
+    client.fireEvent('increase-events')
   end
 end
