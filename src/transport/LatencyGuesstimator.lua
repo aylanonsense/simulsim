@@ -17,9 +17,11 @@ function LatencyGuesstimator:new(params)
     _bestLowerLatencyDuration = nil,
     _bestHigherLatency = nil,
     _bestHigherLatencyDuration = nil,
+    _spikeQuota = 0.00,
     -- _reluctance = 0.00,
     update = function(self, dt)
       self._time = self._time + dt
+      self._spikeQuota = math.min(4, self._spikeQuota + dt / 2)
       -- self._reluctance = math.max(0, self._reluctance - dt - 0.01 * self._reluctance)
       local latency = self:getLatency()
       -- Calculate what the best latency would be to lower to
@@ -32,7 +34,7 @@ function LatencyGuesstimator:new(params)
       self._bestHigherLatencyDuration = nil
       for i = #self._latencyHistory, 1, -1 do
         local record = self._latencyHistory[i]
-        if record.time > self._time - LATENCY_WINDOW and record.time > self._lastLatencyChangeTime then
+        if record.time > self._time - LATENCY_WINDOW and record.time > self._lastLatencyChangeTime and not record.isAnomaly then
           -- Find higher latencies
           if record.latency >= latency then
             isFindingLowerLatencies = false
@@ -175,7 +177,17 @@ function LatencyGuesstimator:new(params)
       else
         numYLabels = 2
       end
-      local labelStep = math.ceil(1000 * maxLatency / (numYLabels - 1) / 50) * 50
+      local minLabelStep
+      if maxLatency > 350 then
+        minLabelStep = 50
+      elseif maxLatency > 100 then
+        minLabelStep = 25
+      elseif maxLatency > 50 then
+        minLabelStep = 10
+      else
+        minLabelStep = 5
+      end
+      local labelStep = math.ceil(1000 * maxLatency / (numYLabels - 1) / minLabelStep) * minLabelStep
       local maxYValue = (numYLabels - 1) * labelStep
       local yStep = (height - 7.5 * numYLabels) / (numYLabels - 1)
       local maxLabelLength = #('' .. maxYValue)
@@ -211,8 +223,9 @@ function LatencyGuesstimator:new(params)
           local h = (height - 5) * 1000 * record.latency / maxYValue
           local recordX = x + width - (width - 5 * maxLabelLength - 3) * ((self._time - record.time) / LATENCY_WINDOW)
           local recordY = y + height - h
-          -- if 
-          if record.type == 'rejection' then
+          if record.isAnomaly then
+            love.graphics.setColor(0.6, 0.6, 0.6)
+          elseif record.type == 'rejection' then
             love.graphics.setColor(0.8, 0.3, 0.3)
           else
             love.graphics.setColor(0.8, 0.8, 0.8)
@@ -246,7 +259,14 @@ function LatencyGuesstimator:new(params)
       -- self._reluctance = self._reluctance + 2.50
     end,
     record = function(self, latency, type)
-      table.insert(self._latencyHistory, { time = self._time, latency = latency, type = type })
+      local isAnomaly
+      if latency > self:getLatency() + 0.001 and self._spikeQuota > 1.00 then
+        isAnomaly = true
+        self._spikeQuota = self._spikeQuota - 1.00
+      else
+        isAnomaly = false
+      end
+      table.insert(self._latencyHistory, { time = self._time, latency = latency, type = type, isAnomaly = isAnomaly })
     end,
     onLatencyChange = function(self, callback) end
   }
