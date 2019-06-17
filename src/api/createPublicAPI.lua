@@ -169,6 +169,9 @@ local function createClientAPI(client, isClientSide)
     end,
     simulateNetworkConditions = function(params)
       client:simulateNetworkConditions(params)
+    end,
+    drawNetworkStats = function(x, y, width, height)
+      client:drawNetworkStats(x, y, width, height)
     end
   }
 

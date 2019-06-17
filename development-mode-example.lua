@@ -4,6 +4,8 @@
 -- Load simulsim as a dependency (you should use a GitHub url for a specific commit)
 local simulsim = require 'simulsim'
 
+local latency = 250
+
 -- Create the exact same game as seen in simple.lua
 local game = simulsim.defineGame()
 function game.load(self)
@@ -38,7 +40,7 @@ end
 -- This lets you preview what your game will look like once it's fully deployed to a remote server!
 local network, server = simulsim.createGameNetwork(game, {
   mode = 'development',
-  numClients = 2
+  numClients = 1
 })
 
 -- Set up the exact same server as seen in simple.lua
@@ -62,7 +64,7 @@ for clientIndex, client in ipairs(network.clients) do
   -- (we can customize this to see how our game will perform in different network conditions)
   function client.load()
     client.simulateNetworkConditions({
-      latency = 250,
+      latency = latency,
       latencyDeviation = 50,
       latencySpikeChance = 0.00,
       packetLossChance = 0.00
@@ -94,6 +96,12 @@ for clientIndex, client in ipairs(network.clients) do
       client.disconnect()
     elseif not isLeftPlayer and key == '-' then
       client.disconnect()
+    elseif key == 'lshift' then
+      latency = latency - 50
+      client.simulateNetworkConditions({ latency = latency })
+    elseif key == 'rshift' then
+      latency = latency + 50
+      client.simulateNetworkConditions({ latency = latency })
     end
   end
 
@@ -123,5 +131,6 @@ for clientIndex, client in ipairs(network.clients) do
     else
       love.graphics.print('Connected! Frames of latency: ' .. client.getFramesOfLatency(), 3, 3)
     end
+    client.drawNetworkStats(10, 30, 380, 50)
   end
 end
