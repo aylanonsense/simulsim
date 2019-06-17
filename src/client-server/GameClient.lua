@@ -2,6 +2,7 @@
 local MessageClient = require 'src/client-server/MessageClient'
 local GameRunner = require 'src/game/GameRunner'
 local OffsetOptimizer = require 'src/transport/OffsetOptimizer'
+local LatencyGuesstimator = require 'src/transport/LatencyGuesstimator'
 local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
