@@ -54,6 +54,8 @@ local function createServerAPI(server, isServerSide)
   local clients = {}
 
   local api = {
+    game = server.game,
+
     -- Overrideable callback functions
     clientconnected = function(client) end,
     clientdisconnected = function(client) end,

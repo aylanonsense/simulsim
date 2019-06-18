@@ -2,7 +2,8 @@
 local MessageClient = require 'src/client-server/MessageClient'
 local GameRunner = require 'src/game/GameRunner'
 local OffsetOptimizer = require 'src/transport/OffsetOptimizer'
-local LatencyGuesstimator = require 'src/transport/LatencyGuesstimator'
+local LatencyGuesstimator = require 'src/sync/LatencyGuesstimator'
+local TimeOffsetGuesstimator = require 'src/sync/TimeOffsetGuesstimator'
 local tableUtils = require 'src/utils/table'
 local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
@@ -55,6 +56,7 @@ function GameClient:new(params)
     maxOffsetBeforeImmediateCorrection = 20
   })
   local latencyGuesstimator = LatencyGuesstimator:new()
+  local timeOffsetGuesstimator = TimeOffsetGuesstimator:new()
 
   -- Wrap the raw connection in a message client to make it easier to work with
   local messageClient = MessageClient:new({ conn = conn })
@@ -77,6 +79,7 @@ function GameClient:new(params)
     _timeSyncOptimizer = timeSyncOptimizer,
     _latencyOptimizer = latencyOptimizer,
     _latencyGuesstimator = latencyGuesstimator,
+    _timeOffsetGuesstimator = timeOffsetGuesstimator,
     _framesOfLatency = 0,
     _framesSinceSetInputs = 0,
     _framesUntilNextFlush = framesBetweenFlushes,
@@ -183,6 +186,7 @@ function GameClient:new(params)
       -- Update the underlying messaging client
       self._messageClient:update(dt)
       self._latencyGuesstimator:update(dt)
+      self._timeOffsetGuesstimator:update(dt)
     end,
     moveForwardOneFrame = function(self, dt)
       self._clientFrame = self._clientFrame + 1
@@ -317,7 +321,15 @@ function GameClient:new(params)
       end
     end,
     drawNetworkStats = function(self, x, y, width, height)
-      self._latencyGuesstimator:draw(x, y, width, height)
+      -- Draw the latency and time offset side-by-side
+      if width > 2 * height then
+        self._latencyGuesstimator:draw(x, y, width / 2, height)
+        self._timeOffsetGuesstimator:draw(x + width / 2, y, width / 2, height)
+      -- Draw the latency and time offset stacked on one another
+      else
+        self._latencyGuesstimator:draw(x, y, width, height * 2 / 3)
+        self._timeOffsetGuesstimator:draw(x, y + height * 2 / 3, width, height * 1 / 3)
+      end
     end,
     simulateNetworkConditions = function(self, params)
       self._messageClient:simulateNetworkConditions(params)
@@ -474,7 +486,7 @@ function GameClient:new(params)
     end,
     _handleReceiveEvent = function(self, event)
       if event.serverMetadata and event.serverMetadata.frame then
-        self:_recordTimeOffset(event.serverMetadata.frame)
+        self:_recordTimeOffset(event.serverMetadata.frame, 'event')
       end
       local preservedFrameAdjustment = 0
       if event.serverMetadata and event.serverMetadata.proposedEventFrame then
@@ -489,7 +501,7 @@ function GameClient:new(params)
       self:_unapplyEvent(event)
     end,
     _handlePingResponse = function(self, ping)
-      self:_recordTimeOffset(ping.frame)
+      self:_recordTimeOffset(ping.frame, 'ping')
       self:_recordLatencyOffset(ping.clientMetadata, ping.serverMetadata, 'ping')
     end,
     _syncToTargetGame = function(self, sourceGame, targetGame, isPrediction)
@@ -539,7 +551,7 @@ function GameClient:new(params)
         self:_setInitialState(state)
       else
         local frame = state.frame
-        self:_recordTimeOffset(frame)
+        self:_recordTimeOffset(frame, 'snapshot')
         -- state represents what the game would currently look like with no client-side prediction
         if self._runnerWithoutPrediction then
           self._runnerWithoutPrediction:applyState(tableUtils.cloneTable(state))
@@ -639,7 +651,8 @@ function GameClient:new(params)
       }
       return obj
     end,
-    _recordTimeOffset = function(self, frame)
+    _recordTimeOffset = function(self, frame, type)
+      self._timeOffsetGuesstimator:record(self._clientFrame - frame, type)
       if self._hasSetInitialState then
         self._timeSyncOptimizer:recordOffset(frame - self.gameWithoutSmoothing.frame - 1)
       end

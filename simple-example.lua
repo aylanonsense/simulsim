@@ -47,7 +47,11 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 -- Create a client-server network for the game to run on
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer', cullRedundantEvents = false })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'development', cullRedundantEvents = false })
+
+function server.load()
+  server.game.frame = 500
+end
 
 -- When a client connects to the server, spawn a playable entity for them to control
 function server.clientconnected(client)
@@ -66,6 +70,10 @@ end
 
 function client.load()
   client.timeSinceInputs = 0.00
+  client.simulateNetworkConditions({
+    latency = 200,
+    latencyDeviation = 60
+  })
 end
 
 -- Every frame the client tells the server which buttons it's pressing
