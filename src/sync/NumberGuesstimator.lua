@@ -38,33 +38,42 @@ function NumberGuesstimator:new(params)
       self.bestLowerGuessDuration = nil
       self.bestHigherGuess = nil
       self.bestHigherGuessDuration = nil
-      -- TODO remove records
+      for i = #self.guesses, 1, -1 do
+        local record = self.guesses[i]
+        if record.endTime and record.endTime < self.time - self.timeWindow then
+          table.remove(self.guesses, i)
+        end
+      end
       for i = #self.records, 1, -1 do
         local record = self.records[i]
-        if record.time > self.time - self.timeWindow and record.time > self.lastGuessTime and not record.isAnomaly then
-          -- Find higher latencies
-          if record.value >= bestGuess then
-            isFindingLowerLatencies = false
-            if not self.bestHigherGuess or record.value >= self.bestHigherGuess then
-              self.bestHigherGuess = record.value
-              self.bestHigherGuessDuration = self.time - record.time
-              bestHigherGuessRecord = record
-            elseif record.value + 0.008 >= self.bestHigherGuess then
-              self.bestHigherGuessDuration = self.time - record.time
-              bestHigherGuessRecord = record
-            end
-          -- Find lower latencies
-          elseif isFindingLowerLatencies then
-            if not lowerGuess then
-              lowerGuess = record.value
-            elseif record.value > lowerGuess then
-              if not self.bestLowerGuess or (bestGuess - self.bestLowerGuess) * self.bestLowerGuessDuration < (bestGuess - lowerGuess) * lowerGuessDuration then
-                self.bestLowerGuess = lowerGuess
-                self.bestLowerGuessDuration = lowerGuessDuration
+        if record.time < self.time - self.timeWindow then
+          table.remove(self.records, i)
+        else
+          if record.time > self.lastGuessTime and not record.isAnomaly then
+            -- Find higher latencies
+            if record.value >= bestGuess then
+              isFindingLowerLatencies = false
+              if not self.bestHigherGuess or record.value >= self.bestHigherGuess then
+                self.bestHigherGuess = record.value
+                self.bestHigherGuessDuration = self.time - record.time
+                bestHigherGuessRecord = record
+              elseif record.value + 0.008 >= self.bestHigherGuess then
+                self.bestHigherGuessDuration = self.time - record.time
+                bestHigherGuessRecord = record
               end
-              lowerGuess = record.value
+            -- Find lower latencies
+            elseif isFindingLowerLatencies then
+              if not lowerGuess then
+                lowerGuess = record.value
+              elseif record.value > lowerGuess then
+                if not self.bestLowerGuess or (bestGuess - self.bestLowerGuess) * self.bestLowerGuessDuration < (bestGuess - lowerGuess) * lowerGuessDuration then
+                  self.bestLowerGuess = lowerGuess
+                  self.bestLowerGuessDuration = lowerGuessDuration
+                end
+                lowerGuess = record.value
+              end
+              lowerGuessDuration = self.time - record.time
             end
-            lowerGuessDuration = self.time - record.time
           end
         end
       end
