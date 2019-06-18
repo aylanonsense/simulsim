@@ -2,7 +2,7 @@ local tableUtils = require 'src/utils/table'
 
 local ObjectPool = {}
 
-function ObjectPool:new = function()
+function ObjectPool:new()
   return {
     _objects = {},
     _index = 1,
