@@ -14,44 +14,49 @@ local function setLogLevel(lvl)
   logLevel = lvl
 end
 
+local function isLogging(lvl)
+  return LOG_LEVEL_PRIORITIES[logLevel] >= LOG_LEVEL_PRIORITIES[lvl]
+end
+
 local function error(...)
-  if LOG_LEVEL_PRIORITIES[logLevel] >= LOG_LEVEL_PRIORITIES.ERROR then
+  if isLogging('ERROR') then
     print('ERROR:', ...)
   end
 end
 
 local function warn(...)
-  if LOG_LEVEL_PRIORITIES[logLevel] >= LOG_LEVEL_PRIORITIES.WARN then
+  if isLogging('WARN') then
     print('WARN:', ...)
   end
 end
 
 local function info(...)
-  if LOG_LEVEL_PRIORITIES[logLevel] >= LOG_LEVEL_PRIORITIES.INFO then
+  if isLogging('INFO') then
     print('INFO:', ...)
   end
 end
 
 local function verbose(...)
-  if LOG_LEVEL_PRIORITIES[logLevel] >= LOG_LEVEL_PRIORITIES.VERBOSE then
+  if isLogging('VERBOSE') then
     print('VERBOSE:', ...)
   end
 end
 
 local function debug(...)
-  if LOG_LEVEL_PRIORITIES[logLevel] >= LOG_LEVEL_PRIORITIES.DEBUG then
+  if isLogging('DEBUG') then
     print('DEBUG:', ...)
   end
 end
 
 local function silly(...)
-  if LOG_LEVEL_PRIORITIES[logLevel] >= LOG_LEVEL_PRIORITIES.SILLY then
+  if isLogging('SILLY') then
     print('SILLY:', ...)
   end
 end
 
 return {
   setLogLevel = setLogLevel,
+  isLogging = isLogging,
   error = error,
   warn = warn,
   info = info,

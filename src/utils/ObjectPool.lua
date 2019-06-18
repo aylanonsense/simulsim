@@ -15,7 +15,7 @@ function ObjectPool:new = function()
       self._index = self._index + 1
       return self._objects[self._index - 1]
     end,
-    reset = function(self)
+    releaseAll = function(self)
       self._index = 1
     end
   }

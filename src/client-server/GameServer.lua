@@ -3,15 +3,9 @@ local MessageServer = require 'src/client-server/MessageServer'
 local GameRunner = require 'src/game/GameRunner'
 local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
+local ObjectPool = require 'src/utils/ObjectPool'
 
 local ServerSideGameClient = {}
-
--- to optimize
---  receiving events from clients
---  sending events to clients
---  network traffic
---  sending snapshots to clients
---  iterating through clients
 
 function ServerSideGameClient:new(params)
   params = params or {}
@@ -31,6 +25,7 @@ function ServerSideGameClient:new(params)
     _disconnectCallbacks = {},
     _framesBetweenFlushes = framesBetweenFlushes,
     _framesBetweenSnapshots = framesBetweenSnapshots,
+    _objectPool = ObjectPool:new(),
 
     -- Public vars
     clientId = clientId,
@@ -60,6 +55,7 @@ function ServerSideGameClient:new(params)
         self._framesUntilNextFlush = self._framesUntilNextFlush - 1
         if self._framesUntilNextFlush <= 0 then
           self._framesUntilNextFlush = self._framesBetweenFlushes
+          self._objectPool:releaseAll()
           self._messageServer:flush(self._connId)
         end
       end
@@ -71,27 +67,31 @@ function ServerSideGameClient:new(params)
         callback(reason)
       end
     end,
+    _buffer = function(self, messageType, messageContent)
+      local message = self._objectPool:requisition()
+      message[1] = messageType
+      message[2] = messageContent
+      self._messageServer:buffer(self._connId, message)
+      if self._framesBetweenFlushes <= 0 then
+        self._objectPool:releaseAll()
+        self._messageServer:flush(self._connId)
+      end
+    end,
     _sendStateSnapshot = function(self)
-      self._messageServer:buffer(self._connId, { 'state-snapshot', self._server:generateStateSnapshotForClient(self) })
+      self:_buffer('state-snapshot', self._server:generateStateSnapshotForClient(self))
     end,
     _sendPingResponse = function(self, pingResponse)
-      self._messageServer:buffer(self._connId, { 'ping-response', pingResponse })
-      if self._framesBetweenFlushes <= 0 then
-        self._messageServer:flush(self._connId)
-      end
+      self:_buffer('ping-response', pingResponse)
     end,
     _sendEvent = function(self, event)
-      self._messageServer:buffer(self._connId, { 'event', event })
-      if self._framesBetweenFlushes <= 0 then
-        self._messageServer:flush(self._connId)
-      end
+      self:_buffer('event', event)
     end,
     -- Rejects an event that came from this client
     _rejectEvent = function(self, event, reason)
-      self._messageServer:buffer(self._connId, { 'reject-event', { event, reason } })
-      if self._framesBetweenFlushes <= 0 then
-        self._messageServer:flush(self._connId)
-      end
+      local messageContent = self._objectPool:requisition()
+      messageContent[1] = event
+      messageContent[2] = reason
+      self._messageServer:buffer('reject-event', messageContent)
     end,
 
     -- Callback methods
@@ -130,6 +130,8 @@ function GameServer:new(params)
     _messageServer = messageServer,
     _nextClientId = 1,
     _clients = {},
+    _clientsById = {},
+    _clientsByConnId = {},
     _runner = runner,
     _framesBetweenFlushes = framesBetweenFlushes,
     _framesBetweenSnapshots = framesBetweenSnapshots,
@@ -151,11 +153,7 @@ function GameServer:new(params)
     end,
     -- Gets a client with the given id
     getClientById = function(self, clientId)
-      for _, client in ipairs(self._clients) do
-        if client.clientId == clientId then
-          return client
-        end
-      end
+      return self._clientsById[clientId]
     end,
     -- Gets the clients that are currently connected to the server
     getClients = function(self)
@@ -206,7 +204,7 @@ function GameServer:new(params)
       return true
     end,
     generateStateSnapshotForClient = function(self, client)
-      return tableUtils.cloneTable(self.game:getState())
+      return tableUtils.cloneTable(self.game:getState()) -- TODO
     end,
 
     -- Callback methods
@@ -216,11 +214,7 @@ function GameServer:new(params)
 
     -- Private methods
     _getClientByConnId = function(self, connId)
-      for i = 1, #self._clients do
-        if self._clients[i]._connId == connId then
-          return self._clients[i], i
-        end
-      end
+      return self._clientsByConnId[connId]
     end,
     _addServerMetadata = function(self, obj)
       obj.serverMetadata = {
@@ -245,6 +239,8 @@ function GameServer:new(params)
         client.data = clientData
         -- Insert the client into the list of clients
         table.insert(self._clients, client)
+        self._clientsById[client.clientId] = client
+        self._clientsByConnId[connId] = client
         -- Accept the connection
         accept({ clientId, clientData or {}, self:generateStateSnapshotForClient(client) })
         -- Trigger connect callbacks
@@ -259,11 +255,18 @@ function GameServer:new(params)
       self:handleConnectRequest(client, handshake, accept2, reject2)
     end,
     _handleDisconnect = function(self, connId, reason)
-      local client, i = self:_getClientByConnId(connId)
+      local client = self:_getClientByConnId(connId)
       if client then
         logger.info('Server disconnecting client ' .. client.clientId .. ': ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
         -- Remove the client
-        table.remove(self._clients, i)
+        self._clientsById[client.clientId] = nil
+        self._clientsByConnId[connId] = nil
+        for i = #self._clients, 1, -1 do
+          if self._clients[i]._connId == connId then
+            table.remove(self._clients, i)
+            break
+          end
+        end
         -- Trigger the client's disconnect callbacks
         client:_handleDisconnect(reason or 'Connection terminated')
       end
