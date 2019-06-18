@@ -6,6 +6,13 @@ local logger = require 'src/utils/logger'
 
 local ServerSideGameClient = {}
 
+-- to optimize
+--  receiving events from clients
+--  sending events to clients
+--  network traffic
+--  sending snapshots to clients
+--  iterating through clients
+
 function ServerSideGameClient:new(params)
   params = params or {}
   local server = params.server

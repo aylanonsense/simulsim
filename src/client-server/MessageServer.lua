@@ -1,3 +1,5 @@
+local tableUtils = require 'src/utils/table'
+
 local MessageServer = {}
 
 function MessageServer:new(params)
@@ -11,6 +13,7 @@ function MessageServer:new(params)
     _connectCallbacks = {},
     _disconnectCallbacks = {},
     _receiveCallbacks = {},
+    _reusedSendObject = {},
 
     -- Public methods
     startListening = function(self)
@@ -25,10 +28,10 @@ function MessageServer:new(params)
       if conn and conn.status ~= 'disconnected' then
         local prevStatus = conn.status
         conn.status = 'disconnected'
-        conn.heldMessages = {}
-        conn.bufferedMessages = {}
-        -- Forecfully disconnect the connection
-        self._listener:send(connId, { 'force-disconnect', reason })
+        tableUtils.clearProps(conn.heldMessages)
+        tableUtils.clearProps(conn.bufferedMessages)
+        -- Forcefully disconnect the connection
+        self:_send(connId, 'force-disconnect', reason)
         self._listener:disconnect(connId)
         -- Trigger disconnect callbacks
         if prevStatus == 'connected' then
@@ -54,9 +57,8 @@ function MessageServer:new(params)
     flush = function(self, connId)
       local conn = self._connections[connId]
       if conn and conn.status == 'connected' and #conn.bufferedMessages > 0 then
-        local messages = conn.bufferedMessages
-        conn.bufferedMessages = {}
-        self._listener:send(connId, { 'messages', messages })
+        self:_send(connId, 'messages', conn.bufferedMessages)
+        tableUtils.clearProps(conn.bufferedMessages)
       end
     end,
     update = function(self, dt)
@@ -78,13 +80,18 @@ function MessageServer:new(params)
     end,
 
     -- Private methods
+    _send = function(self, connId, messageType, messageContent)
+      self._reusedSendObject[1] = messageType
+      self._reusedSendObject[2] = messageContent
+      self._listener:send(connId, self._reusedSendObject)
+    end,
     _handleDisconnect = function(self, connId)
       local conn = self._connections[connId]
       self._connections[connId] = nil
       if conn and conn.status == 'connected' then
         conn.status = 'disconnected'
-        conn.heldMessages = {}
-        conn.bufferedMessages = {}
+        tableUtils.clearProps(conn.heldMessages)
+        tableUtils.clearProps(conn.bufferedMessages)
         -- Trigger disconnect callbacks
         for _, callback in ipairs(self._disconnectCallbacks) do
           callback(connId, 'Connection terminated')
@@ -107,29 +114,28 @@ function MessageServer:new(params)
         local accept = function(data)
           conn.status = 'connected'
           self._connections[connId].connectAcceptData = data
-          self._listener:send(connId, { 'connect-accept', self._connections[connId].connectAcceptData })
+          self:_send(connId, 'connect-accept', self._connections[connId].connectAcceptData)
           -- Trigger connect callbacks
           for _, callback in ipairs(self._connectCallbacks) do
             callback(connId, data)
           end
           -- Receive held messages
-          local messagesToReceive = conn.heldMessages
-          conn.heldMessages = {}
-          for _, msg in ipairs(messagesToReceive) do
+          for _, msg in ipairs(conn.heldMessages) do
             if conn.status == 'connected' then
               for _, callback in ipairs(self._receiveCallbacks) do
                 callback(connId, msg)
               end
             end
           end
+          tableUtils.clearProps(conn.heldMessages)
         end
         -- Reject the client's request to connect
         local reject = function(reason)
           conn.status = 'disconnected'
-          conn.heldMessages = {}
-          conn.bufferedMessages = {}
+          tableutils.clearProps(conn.heldMessages)
+          tableutils.clearProps(conn.bufferedMessages)
           self._connections[connId] = nil
-          self._listener:send(connId, { 'force-disconnect', reason })
+          self:_send(connId, 'force-disconnect', reason)
           self._listener:disconnect(connId)
         end
         -- Determine if the connection request should be accepted or rejected
@@ -140,13 +146,13 @@ function MessageServer:new(params)
         end
       -- The client didn't get the memo that they're already connected
       elseif conn.status == 'connected' and messageType == 'connect-request' then
-        self._listener:send(connId, { 'connect-accept', self._connections[connId].connectAcceptData })
+        self:_send(connId, 'connect-accept', self._connections[connId].connectAcceptData)
       -- The client is disconnecting
       elseif conn.status ~= 'disconnected' and messageType == 'disconnect-request' then
         local prevStatus = conn.status
         conn.status = 'disconnected'
-        conn.heldMessages = {}
-        conn.bufferedMessages = {}
+        tableUtils.clearProps(conn.heldMessages)
+        tableUtils.clearProps(conn.bufferedMessages)
         -- Trigger disconnect callbacks
         if prevStatus == 'connected' then
           for _, callback in ipairs(self._disconnectCallbacks) do

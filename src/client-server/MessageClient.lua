@@ -1,3 +1,5 @@
+local tableUtils = require 'src/utils/table'
+
 local MessageClient = {}
 
 function MessageClient:new(params)
@@ -19,6 +21,7 @@ function MessageClient:new(params)
     _connectFailureCallbacks = {},
     _disconnectCallbacks = {},
     _receiveCallbacks = {},
+    _reusedSendObject = {},
 
     -- Public methods
     connect = function(self, handshake)
@@ -35,10 +38,10 @@ function MessageClient:new(params)
       if self._status ~= 'disconnected' then
         local prevStatus = self._status
         self._status = 'disconnected'
-        self._bufferedMessages = {}
-        self._heldMessages = {}
+        tableUtils.clearProps(self._bufferedMessages)
+        tableUtils.clearProps(self._heldMessages)
         -- Disconnect from the server
-        self._conn:send({ 'disconnect-request', reason })
+        self:_send('disconnect-request', reason)
         self._conn:disconnect()
         -- Trigger callbacks
         if prevStatus == 'connected' then
@@ -69,9 +72,8 @@ function MessageClient:new(params)
     end,
     flush = function(self)
       if self._status == 'connected' and #self._bufferedMessages > 0 then
-        local messages = self._bufferedMessages
-        self._bufferedMessages = {}
-        self._conn:send({ 'messages', messages })
+        self:_send('messages', self._bufferedMessages)
+        tableUtils.clearProps(self._bufferedMessages)
       end
     end,
     update = function(self, dt)
@@ -85,7 +87,7 @@ function MessageClient:new(params)
           else
             self._retriesLeft = self._retriesLeft - 1
             self._timeSinceRetry = 0.00
-            self._conn:send({ 'connect-request', self._handshake })
+            self:_send('connect-request', self._handshake)
           end
         end
       end
@@ -109,13 +111,18 @@ function MessageClient:new(params)
     end,
 
     -- Private methods
+    _send = function(self, messageType, messageContent)
+      self._reusedSendObject[1] = messageType
+      self._reusedSendObject[2] = messageContent
+      self._conn:send(self._reusedSendObject)
+    end,
     _handleConnect = function(self)
       -- Ready to begin handshaking
       if self._status == 'connecting' then
         self._status = 'handshaking'
         self._retriesLeft = 5
         self._timeSinceRetry = 0.00
-        self._conn:send({ 'connect-request', self._handshake })
+        self:_send('connect-request', self._handshake)
       -- Otherwise if we shouldn't be connected, silently end the connection
       elseif self._status == 'disconnected' then
         self._conn:disconnect()
@@ -140,26 +147,25 @@ function MessageClient:new(params)
       -- The client has accepted the connection request, we are now connected!
       if self._status == 'handshaking' and messageType == 'connect-accept' then
         self._status = 'connected'
-        local messagesToReceive = self._heldMessages
-        self._heldMessages = {}
         -- Trigger connect callbacks
         for _, callback in ipairs(self._connectCallbacks) do
           callback(messageContent)
         end
         -- Play back any held messages
-        for _, msg in ipairs(messagesToReceive) do
+        for _, msg in ipairs(self._heldMessages) do
           if self._status == 'connected' then
             for _, callback in ipairs(self._receiveCallbacks) do
               callback(msg)
             end
           end
         end
+        tableUtils.clearProps(self._heldMessages)
       -- The server has refused the client connection
       elseif self._status ~= 'disconnected' and messageType == 'force-disconnect' then
         local prevStatus = self._status
         self._status = 'disconnected'
-        self._bufferedMessages = {}
-        self._heldMessages = {}
+        tableUtils.clearProps(self._bufferedMessages)
+        tableUtils.clearProps(self._heldMessages)
         -- Trigger disconnect callbacks
         if prevStatus == 'connected' then
           for _, callback in ipairs(self._disconnectCallbacks) do
