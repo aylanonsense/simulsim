@@ -2,13 +2,14 @@ local NumberGuesstimator = require('src/sync/NumberGuesstimator')
 
 local FONT
 
-local TimeOffsetGuesstimator = {}
+local FrameOffsetGuesstimator = {}
 
-function TimeOffsetGuesstimator:new(params)
+function FrameOffsetGuesstimator:new(params)
   local numberGuesstimator = NumberGuesstimator:new(params)
 
-  return {
+  local frameOffsetGuesstimator = {
     _numberGuesstimator = numberGuesstimator,
+    _changeFrameOffsetCallbacks = {},
     update = function(self, dt)
       self._numberGuesstimator:update(dt)
     end,
@@ -25,8 +26,8 @@ function TimeOffsetGuesstimator:new(params)
       love.graphics.rectangle('fill', x, y, width, height)
       -- Draw latency numbers and graph of network traffic
       love.graphics.setColor(1, 1, 0)
-      local latency = math.floor(1000 * self:getTimeOffset())
-      local framesOfLatency = math.ceil(60 * self:getTimeOffset())
+      local latency = math.floor(1000 * self:getFrameOffset())
+      local framesOfLatency = math.ceil(60 * self:getFrameOffset())
       self:_drawNetworkTraffic(x + 4, y + 4, width - 7, height - 7)
       -- Set the color back to what it used to be
       love.graphics.setFont(font)
@@ -95,7 +96,7 @@ function TimeOffsetGuesstimator:new(params)
         love.graphics.setColor(0.25, 0.35, 0.2)
         local right = x + width
         local left = right - (width - 5 * maxLabelLength - 3) * (self._numberGuesstimator.bestLowerGuessDuration / timeWindow)
-        local top = y + height - (height - 5) * (self:getTimeOffset() - minYValue) / (maxYValue - minYValue)
+        local top = y + height - (height - 5) * (self:getFrameOffset() - minYValue) / (maxYValue - minYValue)
         local bottom = y + height - (height - 5) * (60 * self._numberGuesstimator.bestLowerGuess - minYValue) / (maxYValue - minYValue)
         love.graphics.rectangle('fill', left, top, right - left, bottom - top)
       end
@@ -105,7 +106,7 @@ function TimeOffsetGuesstimator:new(params)
         local right = x + width
         local left = right - (width - 5 * maxLabelLength - 3) * (self._numberGuesstimator.bestHigherGuessDuration / timeWindow)
         local top = y + height - (height - 5) * (60 * self._numberGuesstimator.bestHigherGuess - minYValue) / (maxYValue - minYValue)
-        local bottom = y + height - (height - 5) * (self:getTimeOffset() - minYValue) / (maxYValue - minYValue)
+        local bottom = y + height - (height - 5) * (self:getFrameOffset() - minYValue) / (maxYValue - minYValue)
         love.graphics.rectangle('fill', left, top, right - left, bottom - top)
       end
       -- -- Draw the labels on the Y axis
@@ -142,13 +143,30 @@ function TimeOffsetGuesstimator:new(params)
         end
       end
     end,
-    getTimeOffset = function(self)
+    getFrameOffset = function(self)
       return 60 * self._numberGuesstimator:getBestGuess()
+    end,
+    setFrameOffset = function(self, frameOffset)
+      return self._numberGuesstimator:setBestGuess(frameOffset / 60)
     end,
     record = function(self, frameOffset, type)
       self._numberGuesstimator:record(frameOffset / 60, { type = type })
+    end,
+    onChangeFrameOffset = function(self, callback)
+      table.insert(self._changeFrameOffsetCallbacks, callback)
+    end,
+    _handleChangeGuess = function(self, value, prevValue)
+      for _, callback in ipairs(self._changeFrameOffsetCallbacks) do
+        callback(60 * value, prevValue and (60 * prevValue) or prevValue)
+      end
     end
   }
+
+  numberGuesstimator:onChangeGuess(function(value, prevValue)
+    frameOffsetGuesstimator:_handleChangeGuess(value, prevValue)
+  end)
+
+  return frameOffsetGuesstimator
 end
 
-return TimeOffsetGuesstimator
+return FrameOffsetGuesstimator

@@ -4,12 +4,16 @@
 -- Load simulsim as a dependency (you should use a url for a specific commit)
 local simulsim = require 'simulsim'
 
+simulsim.setLogLevel('INFO')
+
+local latency = 200
+
 -- Define a new game
 local game = simulsim.defineGame()
 
 -- When the game is first loaded, set the background color
 function game.load(self)
-  self.data.numEventsPerSecond = 12
+  self.data.numEventsPerSecond = 60
   self.data.backgroundColor = { 0.1, 0.1, 0.1 }
 end
 
@@ -49,7 +53,7 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 -- Create a client-server network for the game to run on
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer', cullRedundantEvents = false, numClients = 1 })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'development', cullRedundantEvents = false, numClients = 1 })
 
 function server.load()
   server.game.frame = 500
@@ -73,7 +77,7 @@ end
 function client.load()
   client.timeSinceInputs = 0.00
   client.simulateNetworkConditions({
-    latency = 200,
+    latency = latency,
     latencyDeviation = 60
   })
 end
@@ -118,5 +122,15 @@ function client.keypressed(key)
     client.fireEvent('increase-events')
   elseif key == 'm' then
     print('CLIENT - marker')
+  elseif key == 'b' then
+    latency = latency - 50
+    client.simulateNetworkConditions({ latency = latency })
+  elseif key == 'n' then
+    latency = latency + 50
+    client.simulateNetworkConditions({ latency = latency })
+  elseif key == 'z' and server and server.game and server.game.frame then
+    server.game.frame = server.game.frame - 10
+  elseif key == 'x' and server and server.game and server.game.frame then
+    server.game.frame = server.game.frame + 10
   end
 end

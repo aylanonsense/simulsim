@@ -4,8 +4,8 @@ function NumberGuesstimator:new(params)
   params = params or {}
   local timeWindow = params.timeWindow or 20.00
   local maxReluctance = params.maxReluctance or 20.00
-  local lowerGuessWeight = params.lowerGuessWeight or 0.55
-  local raiseGuessWeight = params.raiseGuessWeight or 0.15
+  local lowerGuessWeight = params.lowerGuessWeight or 0.45
+  local raiseGuessWeight = params.raiseGuessWeight or 0.10
   local reluctanceMult = params.reluctanceMult or 5.00
 
   return {
@@ -24,6 +24,8 @@ function NumberGuesstimator:new(params)
     bestHigherGuess = nil,
     bestHigherGuessDuration = nil,
     spikeQuota = 0.00,
+    _changeGuessCallbacks = {},
+    _hasMadeGuess = false,
     update = function(self, dt)
       self.time = self.time + dt
       self.spikeQuota = math.min(3, self.spikeQuota + dt / 6.50)
@@ -86,13 +88,13 @@ function NumberGuesstimator:new(params)
           bestHigherGuessRecord.isAnomaly = true
           self.spikeQuota = self.spikeQuota - 1.00
         else
-          self:_setBestGuess(self.bestHigherGuess + 0.001)
+          self:setBestGuess(self.bestHigherGuess + 0.001)
           self.bestHigherGuess = nil
           self.bestHigherGuessDuration = nil
         end
       elseif self.bestLowerGuess and self.bestLowerGuessDuration > 1.00 and (self.bestLowerGuessDuration >= self.timeWindow - 0.50 or (bestGuess - self.bestLowerGuess) * self.bestLowerGuessDuration > self.lowerGuessWeight * (1 + self.reluctanceMult * self.reluctance / self.maxReluctance)) then
         if bestGuess - self.bestLowerGuess > 0.008 then
-          self:_setBestGuess(self.bestLowerGuess)
+          self:setBestGuess(self.bestLowerGuess)
           self.bestLowerGuess = nil
           self.bestLowerGuessDuration = nil
         end
@@ -101,24 +103,45 @@ function NumberGuesstimator:new(params)
     getBestGuess = function(self)
       return self.guesses[#self.guesses].value
     end,
-    _setBestGuess = function(self, value)
-      local lastRecord = self.guesses[#self.guesses]
-      lastRecord.endTime = self.time
-      table.insert(self.guesses, {
-        startTime = self.time,
-        value = value
-      })
-      self.lastGuessTime = self.time
-      self.reluctance = self.maxReluctance
+    setBestGuess = function(self, value)
+      if not self._hasMadeGuess then
+        self._hasMadeGuess = true
+        self.guesses[1].value = value
+        for _, callback in ipairs(self._changeGuessCallbacks) do
+          callback(value, nil)
+        end
+      else
+        local lastRecord = self.guesses[#self.guesses]
+        local prevBestGuess = lastRecord.value
+        if prevBestGuess ~= value then
+          lastRecord.endTime = self.time
+          table.insert(self.guesses, {
+            startTime = self.time,
+            value = value
+          })
+          self.lastGuessTime = self.time
+          self.reluctance = self.maxReluctance
+          for _, callback in ipairs(self._changeGuessCallbacks) do
+            callback(value, prevBestGuess)
+          end
+        end
+      end
     end,
     record = function(self, value, metadata)
       local record = metadata or {}
       record.time = self.time
       record.value = value
-      if #self.guesses == 1 and #self.records == 0 then
-        self.guesses[1].value = value
-      end
       table.insert(self.records, record)
+      if not self._hasMadeGuess then
+        self._hasMadeGuess = true
+        self.guesses[1].value = value
+        for _, callback in ipairs(self._changeGuessCallbacks) do
+          callback(value, nil)
+        end
+      end
+    end,
+    onChangeGuess = function(self, callback)
+      table.insert(self._changeGuessCallbacks, callback)
     end
   }
 end

@@ -7,8 +7,9 @@ local LatencyGuesstimator = {}
 function LatencyGuesstimator:new(params)
   local numberGuesstimator = NumberGuesstimator:new(params)
 
-  return {
+  local latencyGuesstimator = {
     _numberGuesstimator = numberGuesstimator,
+    _changeLatencyCallbacks = {},
     update = function(self, dt)
       self._numberGuesstimator:update(dt)
     end,
@@ -162,10 +163,27 @@ function LatencyGuesstimator:new(params)
     getLatency = function(self)
       return self._numberGuesstimator:getBestGuess()
     end,
+    setLatency = function(self, latency)
+      return self._numberGuesstimator:setBestGuess(latency)
+    end,
     record = function(self, latency, type)
       self._numberGuesstimator:record(latency, { type = type })
+    end,
+    onChangeLatency = function(self, callback)
+      table.insert(self._changeLatencyCallbacks, callback)
+    end,
+    _handleChangeGuess = function(self, value, prevValue)
+      for _, callback in ipairs(self._changeLatencyCallbacks) do
+        callback(value, prevValue)
+      end
     end
   }
+
+  numberGuesstimator:onChangeGuess(function(value, prevValue)
+    latencyGuesstimator:_handleChangeGuess(value, prevValue)
+  end)
+
+  return latencyGuesstimator
 end
 
 return LatencyGuesstimator

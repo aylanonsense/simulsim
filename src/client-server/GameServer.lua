@@ -77,7 +77,6 @@ function ServerSideGameClient:new(params)
       self:_buffer(constants.DEBUG, message)
     end,
     _sendStateSnapshot = function(self)
-      print('sending')
       self:_buffer(constants.STATE_SNAPSHOT, self._server:generateStateSnapshotForClient(self))
     end,
     _sendPingResponse = function(self, pingResponse)
@@ -346,9 +345,9 @@ function GameServer:new(params)
       end
     end,
     _debugLog = function(self, message)
-      if #self._clients > 0 then
-        self._clients[1]:_sendDebugLog(message .. ' [frame=' .. self.game.frame .. ']')
-      end
+      -- if #self._clients > 0 then
+      --   self._clients[1]:_sendDebugLog(message .. ' [frame=' .. self.game.frame .. ']')
+      -- end
     end
   }
 
