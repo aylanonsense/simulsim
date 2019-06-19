@@ -87,7 +87,7 @@ function ServerSideGameClient:new(params)
     end,
     -- Rejects an event that came from this client
     _rejectEvent = function(self, event)
-      self:_buffer(constants.REJECT_EVENT, event)
+      -- self:_buffer(constants.REJECT_EVENT, event)
     end,
 
     -- Callback methods
