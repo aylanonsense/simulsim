@@ -112,5 +112,7 @@ function client.keypressed(key)
     client.fireEvent('reduce-events')
   elseif key == 'rshift' then
     client.fireEvent('increase-events')
+  elseif key == 'm' then
+    print('CLIENT - marker')
   end
 end

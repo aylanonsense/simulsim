@@ -315,13 +315,13 @@ function GameServer:new(params)
           end
           if not eventApplied then
             -- Let the client know that their event was rejected or wasn't able to be applied
-            self:_debugLog('Rejecting "' .. event.type .. '" event from client ' .. client.clientId)
+            -- self:_debugLog('Rejecting "' .. event.type .. '" event from client ' .. client.clientId)
             client:_rejectEvent(event)
           end
         elseif messageType == constants.PING then
           local pingResponse = self:_addServerMetadata(messageContent)
           pingResponse.frame = self.game.frame
-          self:_debugLog('Sending ping response to client ' .. client.clientId)
+          -- self:_debugLog('Sending ping response to client ' .. client.clientId)
           client:_sendPingResponse(pingResponse)
         end
       end
