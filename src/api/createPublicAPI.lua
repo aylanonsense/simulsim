@@ -70,9 +70,10 @@ local function createServerAPI(server, isServerSide)
     shouldSendEventToClient = function(client, event)
       return true
     end,
-    generateStateSnapshotForClient = function(client)
-      return tableUtils.cloneTable(server.game:getState())
-    end,
+    -- TODO add back in properly
+    -- generateStateSnapshotForClient = function(client)
+    --   return tableUtils.cloneTable(server.game:getState())
+    -- end,
 
     -- Functions to call
     isServerSide = function()
@@ -119,9 +120,9 @@ local function createServerAPI(server, isServerSide)
   server.shouldSendEventToClient = function(self, client, event)
     return api.shouldSendEventToClient(api.getClientById(client.clientId), event)
   end
-  server.generateStateSnapshotForClient = function(self, client)
-    return api.generateStateSnapshotForClient(api.getClientById(client.clientId))
-  end
+  -- server.generateStateSnapshotForClient = function(self, client)
+  --   return api.generateStateSnapshotForClient(api.getClientById(client.clientId))
+  -- end
 
   -- Return the server api
   return api

@@ -3,6 +3,7 @@ local MessageServer = require 'src/client-server/MessageServer'
 local GameRunner = require 'src/game/GameRunner'
 local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
+local tableUtils = require 'src/utils/table'
 local constants = require 'src/client-server/gameConstants'
 
 local ServerSideGameClient = {}
@@ -76,6 +77,7 @@ function ServerSideGameClient:new(params)
       self:_buffer(constants.DEBUG, message)
     end,
     _sendStateSnapshot = function(self)
+      print('sending')
       self:_buffer(constants.STATE_SNAPSHOT, self._server:generateStateSnapshotForClient(self))
     end,
     _sendPingResponse = function(self, pingResponse)
@@ -169,6 +171,7 @@ function GameServer:new(params)
       return event
     end,
     update = function(self, dt)
+      self._debugTime = (self._debugTime or 0) + dt
       -- Update the underlying messaging server
       self._messageServer:update(dt)
       -- Update all clients
@@ -177,6 +180,7 @@ function GameServer:new(params)
       end
     end,
     moveForwardOneFrame = function(self, dt)
+      self:_debugLog('moveForwardOneFrame: frame = ' .. self.game.frame .. '  time = ' .. (math.floor(1000 * self._debugTime) / 1000))
       -- Update the game via the game runner
       self._runner:moveForwardOneFrame(dt)
       -- Update all clients
@@ -238,6 +242,7 @@ function GameServer:new(params)
         self._clientsById[client.clientId] = client
         self._clientsByConnId[connId] = client
         -- Accept the connection
+        print('accepting')
         accept({ clientId, clientData or {}, self:generateStateSnapshotForClient(client) })
         -- Trigger connect callbacks
         for _, callback in ipairs(self._connectCallbacks) do
@@ -315,13 +320,13 @@ function GameServer:new(params)
           end
           if not eventApplied then
             -- Let the client know that their event was rejected or wasn't able to be applied
-            -- self:_debugLog('Rejecting "' .. event.type .. '" event from client ' .. client.clientId)
+            self:_debugLog('Rejecting "' .. event.type .. '" event from client ' .. client.clientId)
             client:_rejectEvent(event)
           end
         elseif messageType == constants.PING then
           local pingResponse = self:_addServerMetadata(messageContent)
           pingResponse.frame = self.game.frame
-          -- self:_debugLog('Sending ping response to client ' .. client.clientId)
+          self:_debugLog('Sending ping response to client ' .. client.clientId)
           client:_sendPingResponse(pingResponse)
         end
       end
