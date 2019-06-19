@@ -3,7 +3,7 @@ local MessageServer = require 'src/client-server/MessageServer'
 local GameRunner = require 'src/game/GameRunner'
 local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
-local ObjectPool = require 'src/utils/ObjectPool'
+local constants = require 'src/client-server/gameConstants'
 
 local ServerSideGameClient = {}
 
@@ -25,7 +25,6 @@ function ServerSideGameClient:new(params)
     _disconnectCallbacks = {},
     _framesBetweenFlushes = framesBetweenFlushes,
     _framesBetweenSnapshots = framesBetweenSnapshots,
-    _objectPool = ObjectPool:new(),
 
     -- Public vars
     clientId = clientId,
@@ -55,7 +54,6 @@ function ServerSideGameClient:new(params)
         self._framesUntilNextFlush = self._framesUntilNextFlush - 1
         if self._framesUntilNextFlush <= 0 then
           self._framesUntilNextFlush = self._framesBetweenFlushes
-          self._objectPool:releaseAll()
           self._messageServer:flush(self._connId)
         end
       end
@@ -68,30 +66,23 @@ function ServerSideGameClient:new(params)
       end
     end,
     _buffer = function(self, messageType, messageContent)
-      local message = self._objectPool:requisition()
-      message[1] = messageType
-      message[2] = messageContent
-      self._messageServer:buffer(self._connId, message)
+      self._messageServer:buffer(self._connId, messageType, messageContent)
       if self._framesBetweenFlushes <= 0 then
-        self._objectPool:releaseAll()
         self._messageServer:flush(self._connId)
       end
     end,
     _sendStateSnapshot = function(self)
-      self:_buffer('state-snapshot', self._server:generateStateSnapshotForClient(self))
+      self:_buffer(constants.STATE_SNAPSHOT, self._server:generateStateSnapshotForClient(self))
     end,
     _sendPingResponse = function(self, pingResponse)
-      self:_buffer('ping-response', pingResponse)
+      self:_buffer(constants.PING_RESPONSE, pingResponse)
     end,
     _sendEvent = function(self, event)
-      self:_buffer('event', event)
+      self:_buffer(constants.EVENT, event)
     end,
     -- Rejects an event that came from this client
-    _rejectEvent = function(self, event, reason)
-      local messageContent = self._objectPool:requisition()
-      messageContent[1] = event
-      messageContent[2] = reason
-      self._messageServer:buffer('reject-event', messageContent)
+    _rejectEvent = function(self, event)
+      self:_buffer(constants.REJECT_EVENT, event)
     end,
 
     -- Callback methods
@@ -274,11 +265,11 @@ function GameServer:new(params)
     _handleReceive = function(self, connId, messageType, messageContent)
       local client = self:_getClientByConnId(connId)
       if client then
-        if messageType == 'event' then
+        if messageType == constants.EVENT then
           -- Add some metadata onto the event recording the fact that it was received
           local event = self:_addServerMetadata(messageContent)
           local eventApplied = false
-          local rejectReason
+          -- local rejectReason
           if self:shouldAcceptEventFromClient(client, event) then
             local frameOffset = event.frame - self.game.frame - 1 -- positive is early, negative is late
             local maxFramesEarly = self._maxClientEventFramesEarly
@@ -296,7 +287,7 @@ function GameServer:new(params)
             if not isTooEarly and not isTooLate then
               if event.isInputEvent and event.type == 'set-inputs' and self.game.frameOfLastInput[client.clientId] and self.game.frameOfLastInput[client.clientId] > event.frame then
                 logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because newer inputs have already been applied [frame=' .. self.game.frame .. ']')
-                rejectReason = 'Newer inputs have already been applied'
+                -- rejectReason = 'Newer inputs have already been applied'
               else
                 event.serverMetadata.proposedEventFrame = event.frame
                 -- Apply the event server-side and let all clients know about it
@@ -307,21 +298,21 @@ function GameServer:new(params)
                 eventApplied = self:_applyEvent(event)
                 if not eventApplied then
                   logger.silly('Server failed to apply "' .. event.type .. '" event from client ' .. client.clientId .. ' [frame=' .. self.game.frame .. ']')
-                  rejectReason = 'Failed to apply event'
+                  -- rejectReason = 'Failed to apply event'
                 end
               end
             else
               logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because it was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'early' or 'late') .. ' [frame=' .. self.game.frame .. ']')
-              rejectReason = 'Event was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'early' or 'late')
+              -- rejectReason = 'Event was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'early' or 'late')
             end
-          else
-            rejectReason = 'Server decided not to accept events from client'
+          -- else
+          --   rejectReason = 'Server decided not to accept events from client'
           end
           if not eventApplied then
             -- Let the client know that their event was rejected or wasn't able to be applied
-            client:_rejectEvent(event, rejectReason)
+            client:_rejectEvent(event)
           end
-        elseif messageType == 'ping' then
+        elseif messageType == constants.PING then
           local pingResponse = self:_addServerMetadata(messageContent)
           pingResponse.frame = self.game.frame
           client:_sendPingResponse(pingResponse)
@@ -351,8 +342,8 @@ function GameServer:new(params)
   messageServer:onDisconnect(function(connId, reason)
     server:_handleDisconnect(connId, reason)
   end)
-  messageServer:onReceive(function(connId, msg)
-    server:_handleReceive(connId, msg[1], msg[2])
+  messageServer:onReceive(function(connId, messageType, messageContent)
+    server:_handleReceive(connId, messageType, messageContent)
   end)
 
   return server

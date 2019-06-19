@@ -47,7 +47,7 @@ function game.handleEvent(self, eventType, eventData)
 end
 
 -- Create a client-server network for the game to run on
-local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer', cullRedundantEvents = false, numClients = 1 })
+local network, server, client = simulsim.createGameNetwork(game, { mode = 'development', cullRedundantEvents = false, numClients = 1 })
 
 function server.load()
   server.game.frame = 500

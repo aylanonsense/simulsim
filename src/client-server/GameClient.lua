@@ -1,5 +1,6 @@
 -- Load dependencies
 local MessageClient = require 'src/client-server/MessageClient'
+local constants = require 'src/client-server/gameConstants'
 local GameRunner = require 'src/game/GameRunner'
 local OffsetOptimizer = require 'src/transport/OffsetOptimizer'
 local LatencyGuesstimator = require 'src/sync/LatencyGuesstimator'
@@ -159,11 +160,7 @@ function GameClient:new(params)
           })
         end
         -- Send the event to the server
-        self._messageClient:buffer({ 'event', event })
-        -- Send immediately if we're not buffering
-        if self._framesBetweenFlushes <= 0 then
-          self._messageClient:flush()
-        end
+        self:_buffer(constants.EVENT, event)
         -- Return the event
         return event
       end
@@ -422,6 +419,14 @@ function GameClient:new(params)
     end,
 
     -- Private methods
+    _buffer = function(self, messageType, messageContent)
+      -- Send a ping to the server, no need to flush immediately since we want the buffer time to be accounted for
+      self._messageClient:buffer(messageType, messageContent)
+      -- But flush immediately if we have no auto-flushing
+      if self._framesBetweenFlushes <= 0 then
+        self._messageClient:flush()
+      end
+    end,
     _handleConnect = function(self, connectionData)
       self.clientId = connectionData[1]
       logger.info('Client ' .. self.clientId .. ' connected to server [frame=' .. connectionData[3].frame .. ']')
@@ -474,13 +479,13 @@ function GameClient:new(params)
       end
     end,
     _handleReceive = function(self, messageType, messageContent)
-      if messageType == 'event' then
+      if messageType == constants.EVENT then
         self:_handleReceiveEvent(messageContent)
-      elseif messageType == 'reject-event' then
-        self:_handleRejectEvent(messageContent[1], messageContent[2])
-      elseif messageType == 'ping-response' then
+      elseif messageType == constants.REJECT_EVENT then
+        self:_handleRejectEvent(messageContent)
+      elseif messageType == constants.PING_RESPONSE then
         self:_handlePingResponse(messageContent)
-      elseif messageType == 'state-snapshot' then
+      elseif messageType == constants.STATE_SNAPSHOT then
         self:_handleStateSnapshot(messageContent)
       end
     end,
@@ -493,10 +498,10 @@ function GameClient:new(params)
         preservedFrameAdjustment = event.frame - event.serverMetadata.proposedEventFrame
       end
       self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata, 'event')
-      self:_applyEvent(event, { preservedFrameAdjustment = preservedFrameAdjustment })
+      self:_applyEvent(event, { preservedFrameAdjustment = preservedFrameAdjustment }) -- TODO
     end,
-    _handleRejectEvent = function(self, event, reason)
-      logger.debug('Client ' .. self.clientId .. ' "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server: ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
+    _handleRejectEvent = function(self, event)
+      logger.debug('Client ' .. self.clientId .. ' "' .. event.type .. '" event on frame ' .. event.frame .. ' was rejected by server [frame=' .. self.game.frame .. ']')
       self:_recordLatencyOffset(event.clientMetadata, event.serverMetadata, 'rejection')
       self:_unapplyEvent(event)
     end,
@@ -636,19 +641,15 @@ function GameClient:new(params)
       return self._runnerWithoutSmoothing:unapplyEvent(event)
     end,
     _ping = function(self)
-      -- Send a ping to the server, no need to flush immediately since we want the buffer time to be accounted for
-      self._messageClient:buffer({ 'ping', self:_addClientMetadata({}) })
-      -- But flush immediately if we have no auto-flushing
-      if self._framesBetweenFlushes <= 0 then
-        self._messageClient:flush()
-      end
+      -- Send a ping to the server
+      self:_buffer(constants.PING, self:_addClientMetadata({})) -- TODO
     end,
     _addClientMetadata = function(self, obj)
       obj.clientMetadata = {
         clientId = self.clientId,
         clientTimeSent = self._clientTime,
         clientFrameSent = self._clientFrame
-      }
+      } -- TODO
       return obj
     end,
     _recordTimeOffset = function(self, frame, type)
@@ -681,8 +682,8 @@ function GameClient:new(params)
   messageClient:onDisconnect(function(reason)
     client:_handleDisconnect(reason)
   end)
-  messageClient:onReceive(function(msg)
-    client:_handleReceive(msg[1], msg[2])
+  messageClient:onReceive(function(messageType, messageContent)
+    client:_handleReceive(messageType, messageContent)
   end)
 
   return client
