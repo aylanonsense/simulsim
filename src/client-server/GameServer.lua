@@ -54,6 +54,7 @@ function ServerSideGameClient:new(params)
         self._framesUntilNextFlush = self._framesUntilNextFlush - 1
         if self._framesUntilNextFlush <= 0 then
           self._framesUntilNextFlush = self._framesBetweenFlushes
+          self._server:_debugLog('Flushing client ' .. self.clientId)
           self._messageServer:flush(self._connId)
         end
       end
@@ -70,6 +71,9 @@ function ServerSideGameClient:new(params)
       if self._framesBetweenFlushes <= 0 then
         self._messageServer:flush(self._connId)
       end
+    end,
+    _sendDebugLog = function(self, message)
+      self:_buffer(constants.DEBUG, message)
     end,
     _sendStateSnapshot = function(self)
       self:_buffer(constants.STATE_SNAPSHOT, self._server:generateStateSnapshotForClient(self))
@@ -195,6 +199,7 @@ function GameServer:new(params)
       return true
     end,
     generateStateSnapshotForClient = function(self, client)
+      self:_debugLog('Generating state snapshot for client ' .. client.clientId)
       return tableUtils.cloneTable(self.game:getState()) -- TODO
     end,
 
@@ -310,11 +315,13 @@ function GameServer:new(params)
           end
           if not eventApplied then
             -- Let the client know that their event was rejected or wasn't able to be applied
+            self:_debugLog('Rejecting "' .. event.type .. '" event from client ' .. client.clientId)
             client:_rejectEvent(event)
           end
         elseif messageType == constants.PING then
           local pingResponse = self:_addServerMetadata(messageContent)
           pingResponse.frame = self.game.frame
+          self:_debugLog('Sending ping response to client ' .. client.clientId)
           client:_sendPingResponse(pingResponse)
         end
       end
@@ -331,6 +338,11 @@ function GameServer:new(params)
         return true
       else
         return false
+      end
+    end,
+    _debugLog = function(self, message)
+      if #self._clients > 0 then
+        self._clients[1]:_sendDebugLog(message .. ' [frame=' .. self.game.frame .. ']')
       end
     end
   }

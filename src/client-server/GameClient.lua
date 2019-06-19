@@ -487,6 +487,8 @@ function GameClient:new(params)
         self:_handlePingResponse(messageContent)
       elseif messageType == constants.STATE_SNAPSHOT then
         self:_handleStateSnapshot(messageContent)
+      elseif messageType == constants.DEBUG then
+        print('SERVER - ' .. messageContent)
       end
     end,
     _handleReceiveEvent = function(self, event)
