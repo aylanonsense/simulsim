@@ -16,11 +16,13 @@ end
 -- Update the game's state every frame by moving each entity
 function game.update(self, dt)
   for _, entity in ipairs(self.entities) do
-    local inputs = self:getInputsForClient(entity.clientId) or {}
-    local moveX = (inputs.right and 1 or 0) - (inputs.left and 1 or 0)
-    local moveY = (inputs.down and 1 or 0) - (inputs.up and 1 or 0)
-    entity.x = math.min(math.max(0, entity.x + 200 * moveX * dt), 380)
-    entity.y = math.min(math.max(0, entity.y + 200 * moveY * dt), 380)
+    if entity and entity.x then
+      local inputs = self:getInputsForClient(entity.clientId) or {}
+      local moveX = (inputs.right and 1 or 0) - (inputs.left and 1 or 0)
+      local moveY = (inputs.down and 1 or 0) - (inputs.up and 1 or 0)
+      entity.x = math.min(math.max(0, entity.x + 200 * moveX * dt), 380)
+      entity.y = math.min(math.max(0, entity.y + 200 * moveY * dt), 380)
+    end
   end
 end
 
@@ -100,8 +102,10 @@ function client.draw()
   client.drawNetworkStats(10, 160, 380, 230)
   -- Draw each entity
   for _, entity in ipairs(client.game.entities) do
-    love.graphics.setColor(entity.color)
-    love.graphics.rectangle('fill', entity.x, entity.y, entity.width, entity.height)
+    if entity and entity.x then
+      love.graphics.setColor(entity.color)
+      love.graphics.rectangle('fill', entity.x, entity.y, entity.width, entity.height)
+    end
   end
   love.graphics.setColor(1, 1, 1)
   love.graphics.print(client.game.data.numEventsPerSecond, 10, 10)
