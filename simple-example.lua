@@ -89,12 +89,12 @@ function client.update(dt)
     client.timeSinceInputs = client.timeSinceInputs + dt
     while client.timeSinceInputs > 1 / client.game.data.numEventsPerSecond do
       client.timeSinceInputs = client.timeSinceInputs - 1 / client.game.data.numEventsPerSecond
-      local f = client.inputFrame % 60
+      local f = client.inputFrame % 120
       client.setInputs({
-        up = f < 15 or (love.keyboard.isDown('w') or love.keyboard.isDown('up')),
-        left = (15 <= f and f < 30) or (love.keyboard.isDown('a') or love.keyboard.isDown('left')),
-        down = (30 <= f and f < 45) or (love.keyboard.isDown('s') or love.keyboard.isDown('down')),
-        right = f <= 45 or (love.keyboard.isDown('d') or love.keyboard.isDown('right'))
+        up = f < 30 or (love.keyboard.isDown('w') or love.keyboard.isDown('up')),
+        left = (30 <= f and f < 60) or (love.keyboard.isDown('a') or love.keyboard.isDown('left')),
+        down = (60 <= f and f < 90) or (love.keyboard.isDown('s') or love.keyboard.isDown('down')),
+        right = 90 <= f or (love.keyboard.isDown('d') or love.keyboard.isDown('right'))
       })
     end
   end
