@@ -59,7 +59,7 @@ function ServerSideGameClient:new(params)
         self._framesUntilNextFlush = self._framesUntilNextFlush - 1
         if self._framesUntilNextFlush <= 0 then
           self._framesUntilNextFlush = self._framesBetweenFlushes
-          self._server:_debugLog('Flushing client ' .. self.clientId)
+          -- self._server:_debugLog('Flushing client ' .. self.clientId)
           self._messageServer:flush(self._connId)
         end
       end
@@ -187,7 +187,13 @@ function GameServer:new(params)
       end
     end,
     moveForwardOneFrame = function(self, dt)
-      self:_debugLog('moveForwardOneFrame: frame = ' .. self.game.frame .. '  time = ' .. (math.floor(1000 * self._debugTime) / 1000))
+      if self.game.frame % 120 == 0 then
+        self:_debugLog('moveForwardOneFrame: frame = ' .. self.game.frame .. ' but the time = ' .. (math.floor(1000 * self._debugTime) / 1000))
+      end
+      if self._debugTime and self._debugTime == self._lastDebugTime then
+        self:_debugLog('server updating multiple frames at once! frame = ' .. self.game.frame .. ' and the time = ' .. (math.floor(1000 * self._debugTime) / 1000))
+      end
+      self._lastDebugTime = self._debugTime
       -- Update the game via the game runner
       self._runner:moveForwardOneFrame(dt)
       -- Update all clients
@@ -354,7 +360,7 @@ function GameServer:new(params)
     end,
     _debugLog = function(self, message)
       if #self._clients > 0 then
-        self._clients[1]:_sendDebugLog(message .. ' [frame=' .. self.game.frame .. ']')
+        self._clients[1]:_sendDebugLog('[frame=' .. self.game.frame .. '] ' .. message)
       end
     end
   }
