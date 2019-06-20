@@ -166,6 +166,9 @@ function LatencyGuesstimator:new(params)
     setLatency = function(self, latency)
       return self._numberGuesstimator:setBestGuess(latency)
     end,
+    hasSetLatency = function(self)
+      return self._numberGuesstimator.hasMadeGuess
+    end,
     record = function(self, latency, type)
       self._numberGuesstimator:record(latency, { type = type })
     end,

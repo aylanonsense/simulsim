@@ -149,6 +149,9 @@ function FrameOffsetGuesstimator:new(params)
     setFrameOffset = function(self, frameOffset)
       return self._numberGuesstimator:setBestGuess(frameOffset / 60)
     end,
+    hasSetFrameOffset = function(self)
+      return self._numberGuesstimator.hasMadeGuess
+    end,
     record = function(self, frameOffset, type)
       self._numberGuesstimator:record(frameOffset / 60, { type = type })
     end,

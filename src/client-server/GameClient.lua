@@ -562,7 +562,11 @@ function GameClient:new(params)
     end,
     _recordLatencyOffset = function(self, clientMetadata, serverMetadata, type)
       if clientMetadata and clientMetadata.clientId == self.clientId and clientMetadata.clientTimeSent then
-        self._latencyGuesstimator:record(self._clientTime - clientMetadata.clientTimeSent, type)
+        local time = self._clientTime - clientMetadata.clientTimeSent
+        if not self._latencyGuesstimator:hasSetLatency() then
+          self._latencyGuesstimator:setLatency(time + math.min(0.5, time))
+        end
+        self._latencyGuesstimator:record(time, type)
       end
     end,
     _recordFrameOffset = function(self, frame, type)

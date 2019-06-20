@@ -25,7 +25,7 @@ function NumberGuesstimator:new(params)
     bestHigherGuessDuration = nil,
     spikeQuota = 0.00,
     _changeGuessCallbacks = {},
-    _hasMadeGuess = false,
+    hasMadeGuess = false,
     update = function(self, dt)
       self.time = self.time + dt
       self.spikeQuota = math.min(3, self.spikeQuota + dt / 6.50)
@@ -104,8 +104,8 @@ function NumberGuesstimator:new(params)
       return self.guesses[#self.guesses].value
     end,
     setBestGuess = function(self, value)
-      if not self._hasMadeGuess then
-        self._hasMadeGuess = true
+      if not self.hasMadeGuess then
+        self.hasMadeGuess = true
         self.guesses[1].value = value
         for _, callback in ipairs(self._changeGuessCallbacks) do
           callback(value, nil)
@@ -132,8 +132,8 @@ function NumberGuesstimator:new(params)
       record.time = self.time
       record.value = value
       table.insert(self.records, record)
-      if not self._hasMadeGuess then
-        self._hasMadeGuess = true
+      if not self.hasMadeGuess then
+        self.hasMadeGuess = true
         self.guesses[1].value = value
         for _, callback in ipairs(self._changeGuessCallbacks) do
           callback(value, nil)

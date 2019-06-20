@@ -84,15 +84,17 @@ end
 
 -- Every frame the client tells the server which buttons it's pressing
 function client.update(dt)
+  client.inputFrame = (client.inputFrame or 0) + 1
   if client.isConnected() and client.game.data.numEventsPerSecond > 0 then
     client.timeSinceInputs = client.timeSinceInputs + dt
     while client.timeSinceInputs > 1 / client.game.data.numEventsPerSecond do
       client.timeSinceInputs = client.timeSinceInputs - 1 / client.game.data.numEventsPerSecond
+      local f = client.inputFrame % 60
       client.setInputs({
-        up = love.keyboard.isDown('w') or love.keyboard.isDown('up'),
-        left = love.keyboard.isDown('a') or love.keyboard.isDown('left'),
-        down = love.keyboard.isDown('s') or love.keyboard.isDown('down'),
-        right = love.keyboard.isDown('d') or love.keyboard.isDown('right')
+        up = f < 15 or (love.keyboard.isDown('w') or love.keyboard.isDown('up')),
+        left = (15 <= f and f < 30) or (love.keyboard.isDown('a') or love.keyboard.isDown('left')),
+        down = (30 <= f and f < 45) or (love.keyboard.isDown('s') or love.keyboard.isDown('down')),
+        right = f <= 45 or (love.keyboard.isDown('d') or love.keyboard.isDown('right'))
       })
     end
   end
