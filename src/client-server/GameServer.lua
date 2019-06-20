@@ -5,6 +5,10 @@ local stringUtils = require 'src/utils/string'
 local logger = require 'src/utils/logger'
 local tableUtils = require 'src/utils/table'
 local constants = require 'src/client-server/gameConstants'
+    
+local marshal = require 'marshal'
+
+local someTestObj = { abc = 'def', def = 5, gji = { 2, 8, 5 } }
 
 local ServerSideGameClient = {}
 
@@ -176,6 +180,10 @@ function GameServer:new(params)
       -- Update all clients
       for _, client in ipairs(self._clients) do
         client:update(dt)
+      end
+      for i = 1, 3000 do
+        local abc = marshal.encode(someTestObj)
+        local def = marshal.decode(abc)
       end
     end,
     moveForwardOneFrame = function(self, dt)

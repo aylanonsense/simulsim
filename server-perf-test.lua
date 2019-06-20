@@ -3,9 +3,6 @@
 
 -- Load simulsim as a dependency (you should use a url for a specific commit)
 local simulsim = require 'simulsim'
-local marshal = require 'marshal'
-
-local someTestObj = { abc = 'def', def = 5, gji = { 2, 8, 5 } }
 
 simulsim.setLogLevel('INFO')
 
@@ -18,8 +15,4 @@ local game = simulsim.defineGame()
 local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer', cullRedundantEvents = false, numClients = 1 })
 
 function server.update(dt)
-  for i = 1, 2000 do
-    local abc = marshal.encode(someTestObj)
-    local def = marshal.decode(abc)
-  end
 end
