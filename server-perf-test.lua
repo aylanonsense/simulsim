@@ -18,7 +18,7 @@ local game = simulsim.defineGame()
 local network, server, client = simulsim.createGameNetwork(game, { mode = 'multiplayer', cullRedundantEvents = false, numClients = 1 })
 
 function server.update(dt)
-  for i = 1, 2 do
+  for i = 1, 2000 do
     local abc = marshal.encode(someTestObj)
     local def = marshal.decode(abc)
   end
