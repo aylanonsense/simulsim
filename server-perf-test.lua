@@ -3,7 +3,7 @@
 
 -- Load simulsim as a dependency (you should use a url for a specific commit)
 local simulsim = require 'simulsim'
-local marshal = require 'mashal'
+local marshal = require 'marshal'
 
 local someTestObj = { abc = 'def', def = 5, gji = { 2, 8, 5 } }
 
