@@ -181,10 +181,10 @@ function GameServer:new(params)
       for _, client in ipairs(self._clients) do
         client:update(dt)
       end
-      for i = 1, 1500 do
-        local abc = marshal.encode(someTestObj)
-        local def = marshal.decode(abc)
-      end
+      -- for i = 1, 1500 do
+      --   local abc = marshal.encode(someTestObj)
+      --   local def = marshal.decode(abc)
+      -- end
     end,
     moveForwardOneFrame = function(self, dt)
       if self.game.frame % 120 == 0 then
