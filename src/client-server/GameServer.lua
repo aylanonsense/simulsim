@@ -181,7 +181,7 @@ function GameServer:new(params)
       for _, client in ipairs(self._clients) do
         client:update(dt)
       end
-      for i = 1, 3000 do
+      for i = 1, 1500 do
         local abc = marshal.encode(someTestObj)
         local def = marshal.decode(abc)
       end
