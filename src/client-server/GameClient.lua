@@ -154,7 +154,7 @@ function GameClient:new(params)
           })
         end
         -- Send the event to the server
-        self:_buffer(constants.EVENT, event)
+        -- self:_buffer(constants.EVENT, event)
         -- Return the event
         return event
       end

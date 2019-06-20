@@ -77,13 +77,13 @@ function ServerSideGameClient:new(params)
       self:_buffer(constants.DEBUG, message)
     end,
     _sendStateSnapshot = function(self)
-      self:_buffer(constants.STATE_SNAPSHOT, self._server:generateStateSnapshotForClient(self))
+      -- self:_buffer(constants.STATE_SNAPSHOT, self._server:generateStateSnapshotForClient(self))
     end,
     _sendPingResponse = function(self, pingResponse)
-      self:_buffer(constants.PING_RESPONSE, pingResponse)
+      -- self:_buffer(constants.PING_RESPONSE, pingResponse)
     end,
     _sendEvent = function(self, event)
-      self:_buffer(constants.EVENT, event)
+      -- self:_buffer(constants.EVENT, event)
     end,
     -- Rejects an event that came from this client
     _rejectEvent = function(self, event)
