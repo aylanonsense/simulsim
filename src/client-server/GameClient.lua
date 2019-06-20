@@ -571,14 +571,13 @@ function GameClient:new(params)
     _handleChangeLatency = function(self, latency, prevLatency)
       local wasStable = self:isStable()
       local clientLabel = self.clientId and ('Client ' .. self.clientId) or 'Client'
-      local framesOfLatency = math.ceil(60 * latency)
+      local framesOfLatency = math.ceil(60 * latency + 1)
       if not prevLatency then
         logger.info(clientLabel .. ' initializing latency to ' .. framesOfLatency .. ' frames [frame=' .. self.game.frame .. ']')
       else
-        local prevFramesOfLatency = math.ceil(60 * prevLatency)
-        local change = framesOfLatency - prevFramesOfLatency
+        local change = framesOfLatency - self._framesOfLatency
         if change ~= 0 then
-          logger.info(clientLabel .. ' adjusting latency from ' .. prevFramesOfLatency .. ' to ' .. framesOfLatency .. ' frames (' .. (change >= 0 and '+' .. change or change) .. ') [frame=' .. self.game.frame .. ']')
+          logger.info(clientLabel .. ' adjusting latency from ' .. self._framesOfLatency .. ' to ' .. framesOfLatency .. ' frames (' .. (change >= 0 and '+' .. change or change) .. ') [frame=' .. self.game.frame .. ']')
         end
       end
       self._framesOfLatency = framesOfLatency
@@ -590,17 +589,16 @@ function GameClient:new(params)
     _handleChangeFrameOffset = function(self, offset, prevOffset)
       local wasStable = self:isStable()
       local clientLabel = self.clientId and ('Client ' .. self.clientId) or 'Client'
-      local frameOffset = math.ceil(offset)
+      local frameOffset = math.ceil(offset + 1)
       if not prevOffset then
         logger.info(clientLabel .. ' initializing frame offset to ' .. (frameOffset >= 0 and '+' .. frameOffset or frameOffset) .. ' frames [frame=' .. self.game.frame .. ']')
       else
-        local prevFrameOffset = math.ceil(prevOffset)
-        local change = frameOffset - prevFrameOffset
+        local change = frameOffset - self._frameOffset
         if change ~= 0 then
-          logger.info(clientLabel .. ' adjusting frame offset from ' .. (prevFrameOffset >= 0 and '+' .. prevFrameOffset or prevFrameOffset) .. ' to ' .. (frameOffset >= 0 and '+' .. frameOffset or frameOffset) .. ' frames (' .. (change >= 0 and '+' .. change or change) .. ') [frame=' .. self.game.frame .. ']')
+          logger.info(clientLabel .. ' adjusting frame offset from ' .. (self._frameOffset >= 0 and '+' .. self._frameOffset or self._frameOffset) .. ' to ' .. (frameOffset >= 0 and '+' .. frameOffset or frameOffset) .. ' frames (' .. (change >= 0 and '+' .. change or change) .. ') [frame=' .. self.game.frame .. ']')
         end
       end
-      local frameOffsetAdjustment = self._frameOffset - frameOffset -- TODO verify
+      local frameOffsetAdjustment = self._frameOffset - frameOffset
       self._frameOffset = frameOffset
       self._hasInitializedFrameOffset = true
       if self._hasSetInitialState then
