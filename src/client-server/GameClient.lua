@@ -550,7 +550,7 @@ function GameClient:new(params)
     end,
     _ping = function(self)
       -- Send a ping to the server
-      self:_buffer(constants.PING, self:_addClientMetadata({})) -- TODO
+      -- self:_buffer(constants.PING, self:_addClientMetadata({})) -- TODO
     end,
     _addClientMetadata = function(self, obj)
       obj.clientMetadata = {
