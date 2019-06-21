@@ -61,8 +61,8 @@ function server.clientdisconnected(client)
 end
 
 function client.load()
-  print(stringUtils.stringify(castle.game.getCurrentGame(), true))
-  print(stringUtils.stringify(castle.game.isLocalGameFile(), true))
+  print(stringUtils.stringify(castle.game.getCurrent(), true))
+  print(stringUtils.stringify(castle.game.isLocalFile(), true))
 end
 
 -- Every frame the client tells the server which buttons it's pressing
