@@ -2,6 +2,7 @@
 -- It's just a bunch of squares running around together
 
 -- Load simulsim as a dependency (you should use a url for a specific commit)
+local stringUtils = require 'src/utils/string'
 local simulsim = require 'simulsim'
 
 -- Define a new game
@@ -57,6 +58,11 @@ end
 -- When a client disconnects from the server, despawn their player entity
 function server.clientdisconnected(client)
   server.fireEvent('despawn-player', { clientId = client.clientId })
+end
+
+function client.load()
+  print(stringUtils.stringify(castle.game.getCurrentGame(), true))
+  print(stringUtils.stringify(castle.game.isLocalGameFile(), true))
 end
 
 -- Every frame the client tells the server which buttons it's pressing
