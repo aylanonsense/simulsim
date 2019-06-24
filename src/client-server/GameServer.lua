@@ -363,6 +363,7 @@ function GameServer:new(params)
       end
     end,
     _debugLog = function(self, message)
+      print('server-side _debugLog [frame=' .. self.game.frame .. '] ' .. message)
       if #self._clients > 0 then
         self._clients[1]:_sendDebugLog('[frame=' .. self.game.frame .. '] ' .. message)
       end
