@@ -3,7 +3,8 @@ main: development-mode-example.lua
 name: Simulsim Example - Development Mode
 description: Showcasing the development mode of simulsim, which allows for simulating multiple clients and network conditions.
 username: bridgs
+primaryColor: C0C0C0
 multiplayer:
     - enabled: true
-dimensions: 830x420
+dimensions: 400x400
 scaling: on

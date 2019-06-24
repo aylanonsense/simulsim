@@ -45,23 +45,23 @@ end
 local network, server, client = simulsim.createGameNetwork(game)
 
 -- When a client connects to the server, spawn a playable entity for them to control
-function server.clientconnected(client)
-  server.fireEvent('spawn-player', {
+function server.clientconnected(self, client)
+  self:fireEvent('spawn-player', {
     clientId = client.clientId,
-    x = 100 + 80 * math.random(),
-    y = 100 + 80 * math.random(),
+    x = 100 + 200 * math.random(),
+    y = 100 + 200 * math.random(),
     color = { math.random(), 1, math.random() }
   })
 end
 
 -- When a client disconnects from the server, despawn their player entity
-function server.clientdisconnected(client)
-  server.fireEvent('despawn-player', { clientId = client.clientId })
+function server.clientdisconnected(self, client)
+  self:fireEvent('despawn-player', { clientId = client.clientId })
 end
 
 -- Every frame the client tells the server which buttons it's pressing
-function client.update(dt)
-  client.setInputs({
+function client.update(self, dt)
+  self:setInputs({
     up = love.keyboard.isDown('w') or love.keyboard.isDown('up'),
     left = love.keyboard.isDown('a') or love.keyboard.isDown('left'),
     down = love.keyboard.isDown('s') or love.keyboard.isDown('down'),
@@ -70,13 +70,24 @@ function client.update(dt)
 end
 
 -- Draw the game for each client
-function client.draw()
+function client.draw(self)
   -- Clear the screen
-  love.graphics.setColor(client.game.data.backgroundColor)
+  love.graphics.setColor(self.game.data.backgroundColor)
   love.graphics.rectangle('fill', 0, 0, 400, 400)
   -- Draw each entity
-  for _, entity in ipairs(client.game.entities) do
+  for _, entity in ipairs(self.game.entities) do
     love.graphics.setColor(entity.color)
     love.graphics.rectangle('fill', entity.x, entity.y, entity.width, entity.height)
+  end
+  -- Draw the client's network status
+  love.graphics.setColor(1, 1, 1)
+  if self:isConnecting() then
+    love.graphics.print('Connecting...', 3, 3)
+  elseif not self:isConnected() then
+    love.graphics.print('Disconnected! :(', 3, 3)
+  elseif not self:isStable() then
+    love.graphics.print('Connected! Stabilizing...', 3, 3)
+  else
+    love.graphics.print('Connected! Frames of latency: ' .. self:getFramesOfLatency(), 3, 3)
   end
 end

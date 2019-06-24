@@ -1,7 +1,7 @@
 local tableUtils = require 'src/utils/table'
 
 local FRAME_RATE = 60
-local LOVE_METHODS = {
+local OVERRIDEABLE_LOVE_METHODS = {
   load = { server = true, client = true },
   update = { server = true, client = true },
   draw = { client = true },
@@ -36,208 +36,164 @@ local LOVE_METHODS = {
   joystickremoved = { client = true }
 }
 
-local function createServerSideClientAPI(client)
-  return {
-    clientId = client.clientId,
-    data = client.data,
-
-    disconnect = function(reason)
-      client:disconnect(reason)
-    end,
-    isConnected = function()
-      return client:isConnected()
-    end
-  }
-end
-
-local function createServerAPI(server, isServerSide)
-  local clients = {}
-
-  local api = {
-    -- Overrideable callback functions
-    clientconnected = function(client) end,
-    clientdisconnected = function(client) end,
-
-    -- Functions that configure server behavior
-    handleConnectRequest = function(handshake, accept, reject)
-      accept()
-    end,
-    shouldAcceptEventFromClient = function(client, event)
-      return true
-    end,
-    shouldSendEventToClient = function(client, event)
-      return true
-    end,
-    generateStateSnapshotForClient = function(client)
-      return tableUtils.cloneTable(server.game:getState())
-    end,
-
-    -- Functions to call
-    isServerSide = function()
-      return isServerSide
-    end,
-    getClients = function()
-      return clients
-    end,
-    getClientById = function(clientId)
-      for _, client in ipairs(clients) do
-        if client.clientId == clientId then
-          return client
-        end
+local function bindServerToAPI(server, api)
+  -- Allow for certain server methods to be overridden
+  local overrideableMethods = { 'handleConnectRequest', 'shouldAcceptEventFromClient', 'shouldSendEventToClient', 'generateStateSnapshotForClient' }
+  for _, methodName in ipairs(overrideableMethods) do
+    local originalMethod = server[methodName]
+    server[methodName] = function(...)
+      if api[methodName] then
+        return api[methodName](...)
+      else
+        return originalMethod(...)
       end
-    end,
-    fireEvent = function(eventType, eventData, params)
-      return server:fireEvent(eventType, eventData, params)
     end
-  }
+  end
 
   -- Bind events
   server:onConnect(function(client)
-    local clientApi = createServerSideClientAPI(client)
-    table.insert(clients, clientApi)
-    api.clientconnected(clientApi)
+    if api.clientconnected then
+      api.clientconnected(server, client)
+    end
     client:onDisconnect(function(reason)
-      for i = #clients, 1, -1 do
-        if clients[i].clientId == clientApi.clientId then
-          table.remove(clients, i)
-          break
-        end
+      if api.clientdisconnected then
+        api.clientdisconnected(server, client, reason)
       end
-      api.clientdisconnected(clientApi)
     end)
   end)
 
-  -- Override server methods
-  server.handleConnectRequest = function(self, client, handshake, accept, reject)
-    api.handleConnectRequest(handshake, accept, reject)
-  end
-  server.shouldAcceptEventFromClient = function(self, client, event)
-    return api.shouldAcceptEventFromClient(api.getClientById(client.clientId), event)
-  end
-  server.shouldSendEventToClient = function(self, client, event)
-    return api.shouldSendEventToClient(api.getClientById(client.clientId), event)
-  end
-  server.generateStateSnapshotForClient = function(self, client)
-    return api.generateStateSnapshotForClient(api.getClientById(client.clientId))
-  end
-
-  -- Return the server api
-  return api
+  -- Set a metatable so the server inherits all the properties and functions placed on the api
+  setmetatable(server, {
+    __index = api
+  })
 end
 
-local function createClientAPI(client, isClientSide)
-  local api
-  api = {
-    _client = client,
-    clientId = client.clientId,
-    data = client.data,
-    game = client.game,
-    gameWithoutSmoothing = client.gameWithoutSmoothing,
-    gameWithoutPrediction = client.gameWithoutPrediction,
-
-    -- Overrideable callback functions
-    connected = function() end,
-    connectfailed = function(reason) end,
-    disconnected = function(reason) end,
-    stabilized = function() end,
-    destabilized = function() end,
-
-    -- Functions to call
-    isClientSide = function()
-      return isClientSide
-    end,
-    disconnect = function(reason)
-      client:disconnect(reason)
-    end,
-    isConnecting = function()
-      return client:isConnecting()
-    end,
-    isConnected = function()
-      return client:isConnected(0)
-    end,
-    isStable = function()
-      return client:isStable()
-    end,
-    getFramesOfLatency = function()
-      return client:getFramesOfLatency()
-    end,
-    fireEvent = function(eventType, eventData, params)
-      return client:fireEvent(eventType, eventData, params)
-    end,
-    setInputs = function(inputs, params)
-      return client:setInputs(inputs, params)
-    end,
-    simulateNetworkConditions = function(params)
-      client:simulateNetworkConditions(params)
+local function bindClientToAPI(client, api)
+  -- Allow for certain client methods to be overridden
+  local overrideableMethods = { 'syncEntity', 'syncInputs', 'syncData', 'smoothEntity', 'smoothInputs', 'smoothData', 'isEntityUsingPrediction' }
+  for _, methodName in ipairs(overrideableMethods) do
+    local originalMethod = client[methodName]
+    client[methodName] = function(...)
+      if api[methodName] then
+        return api[methodName](...)
+      else
+        return originalMethod(...)
+      end
     end
-  }
+  end
 
   -- Bind events
   client:onConnect(function()
-    api.clientId = client.clientId
-    api.data = client.data
-    api.connected()
+    if api.connected then
+      api.connected(client)
+    end
   end)
   client:onConnectFailure(function(reason)
-    api.clientId = client.clientId
-    api.data = client.data
-    api.connectfailed(reason)
+    if api.connectfailed then
+      api.connectfailed(client, reason)
+    end
   end)
   client:onDisconnect(function(reason)
-    api.disconnected(reason)
-    api.clientId = client.clientId
-    api.data = client.data
+    if api.disconnected then
+      api.disconnected(client, reason)
+    end
   end)
   client:onStabilize(function()
-    api.stabilized()
+    if api.stabilized then
+      api.stabilized(client)
+    end
   end)
   client:onDestabilize(function()
-    api.destabilized()
+    if api.destabilized then
+      api.destabilized(client)
+    end
   end)
 
-  -- Override client methods
-  local overrideableMethods = { 'syncEntity', 'syncInputs', 'syncData', 'smoothEntity', 'smoothInputs', 'smoothData', 'isEntityUsingPrediction' }
-  for _, methodName in ipairs(overrideableMethods) do
-    local currMethod = client[methodName]
-    api[methodName] = function(...)
-      return currMethod(client, ...)
-    end
-    client[methodName] = function(self, ...)
-      return api[methodName](...)
-    end
-  end
-
-  return api
+  -- Set a metatable so the client inherits all the properties and functions placed on the api
+  setmetatable(client, {
+    __index = api
+  })
 end
 
 local function createPublicAPI(network, params)
   params = params or {}
   local overrideCallbackMethods = params.overrideCallbackMethods ~= false
+  local width = params.width
+  local height = params.height
+  local drawClientsInGrid = params.drawClientsInGrid ~= false
 
-  -- Create client APIs
-  local clientAPIs = {}
-  for _, client in ipairs(network.clients) do
-    table.insert(clientAPIs, createClientAPI(client, network:isClientSide()))
+  -- Calculate where each client should be drawn
+  if drawClientsInGrid and width and height then
+    local numCols = math.ceil(math.sqrt(#network.clients))
+    local numRows = math.ceil(#network.clients / numCols)
+    local gridSize = math.max(numCols, numRows)
+    local numEmptySpaces = numCols * numRows - #network.clients
+    local col = 1
+    local row = 1
+    local padding = 1
+    local scaledWidth = (width - padding * (gridSize - 1)) / gridSize
+    local scaledHeight = (height - padding * (gridSize - 1)) / gridSize
+    local scale = math.min(scaledWidth / width, scaledHeight / height)
+    local clientWidth = (width - padding * (gridSize - 1)) * scale
+    local clientHeight = (height - padding * (gridSize - 1)) * scale
+    local xOffset = 0
+    local yOffset = (height - clientHeight * numRows - padding * (numRows - 1)) / 2
+    for _, client in ipairs(network.clients) do
+      local clientX = xOffset + (col - 1) * width * scale + padding * (col - 1)
+      local clientY = yOffset + (row - 1) * height * scale + padding * (row - 1)
+      client._drawProps = { x = clientX, y = clientY, width = clientWidth, height = clientHeight, scale = scale }
+      col = col + 1
+      if col > numCols then
+        col, row = 1, row + 1
+        if row == numRows then
+          xOffset = (clientWidth * numEmptySpaces + padding * math.max(0, numEmptySpaces - 1)) / 2
+        end
+      end
+    end
   end
 
-  -- Create server API
-  local serverAPI = createServerAPI(network.server, network:isServerSide())
+  -- Create a server API and bind the server to it
+  local serverAPI = {}
+  bindServerToAPI(network.server, serverAPI)
 
-  -- Create network API
+  -- Create a client API and bind all clients to it
+  local clientAPI = {
+    toDrawnCoordinates = function(self, x, y)
+      local props = self._drawProps
+      if props then
+        return (x - props.x) * props.scale, (y - props.y) * props.scale
+      else
+        return x, y
+      end
+    end,
+    isHighlighted = function(self)
+      local props = self._drawProps
+      if not props then
+        return true
+      else
+        local x, y = love.mouse.getPosition()
+        return x and y and props.x <= x and x < props.x + props.width and props.y <= y and y < props.y + props.height
+      end
+    end
+  }
+  for _, client in ipairs(network.clients) do
+    bindClientToAPI(client, clientAPI)
+  end
+
+  -- Create a network API
   local networkAPI = {
     server = serverAPI,
-    client = clientAPIs[1],
-    clients = clientAPIs,
-    isClientSide = function()
+    client = clientAPI,
+    isClientSide = function(self)
       return network:isClientSide()
     end,
-    isServerSide = function()
+    isServerSide = function(self)
       return network:isServerSide()
     end
   }
 
   -- Add callback methods onto the network API
-  for methodName, where in pairs(LOVE_METHODS) do
+  for methodName, where in pairs(OVERRIDEABLE_LOVE_METHODS) do
     local originalMethod = love[methodName]
     -- Add an update method onto the network API
     if methodName == 'update' then
@@ -257,16 +213,31 @@ local function createPublicAPI(network, params)
         network:update(dt)
         for f = 1, df do
           network:moveForwardOneFrame(1 / FRAME_RATE)
-          if network:isServerSide() then
-            if serverAPI.update then
-              serverAPI.update(1 / FRAME_RATE)
+          if network:isServerSide() and serverAPI.update then
+            serverAPI.update(network.server, 1 / FRAME_RATE, ...)
+          end
+          if network:isClientSide() and clientAPI.update then
+            for _, client in ipairs(network.clients) do
+              clientAPI.update(client, 1 / FRAME_RATE, ...)
             end
           end
-          if network:isClientSide() then
-            for _, clientAPI in ipairs(clientAPIs) do
-              if clientAPI.update then
-                clientAPI.update(1 / FRAME_RATE)
-              end
+        end
+      end
+    -- Do some trickiness to get multiple clients' screens dispaying at once in development mode
+    elseif methodName == 'draw' then
+      networkAPI.draw = function(...)
+        if network:isClientSide() and clientAPI.draw then
+          for _, client in ipairs(network.clients) do
+            local props = client._drawProps
+            if props then
+              love.graphics.push()
+              love.graphics.translate(props.x, props.y)
+              love.graphics.scale(props.scale, props.scale)
+              love.graphics.setScissor(props.x, props.y, props.width, props.height)
+              clientAPI.draw(client, ...)
+              love.graphics.pop()
+            else
+              clientAPI.draw(client, ...)
             end
           end
         end
@@ -277,16 +248,12 @@ local function createPublicAPI(network, params)
         if originalMethod then
           originalMethod(...)
         end
-        if where.server and network:isServerSide() then
-          if serverAPI[methodName] then
-            serverAPI[methodName](...)
-          end
+        if where.server and network:isServerSide() and serverAPI[methodName] then
+          serverAPI[methodName](network.server, ...)
         end
-        if where.client and network:isClientSide() then
-          for _, clientAPI in ipairs(clientAPIs) do
-            if clientAPI[methodName] then
-              clientAPI[methodName](...)
-            end
+        if where.client and network:isClientSide() and clientAPI[methodName] then
+          for _, client in ipairs(network.clients) do
+            clientAPI[methodName](client, ...)
           end
         end
       end
@@ -315,7 +282,7 @@ local function createPublicAPI(network, params)
   end
 
   -- Return APIs
-  return networkAPI, serverAPI, clientAPIs[1], clientAPIs
+  return networkAPI, serverAPI, clientAPI
 end
 
 return createPublicAPI

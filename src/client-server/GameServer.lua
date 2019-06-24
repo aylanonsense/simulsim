@@ -2,6 +2,7 @@
 local MessageServer = require 'src/client-server/MessageServer'
 local GameRunner = require 'src/game/GameRunner'
 local stringUtils = require 'src/utils/string'
+local tableUtils = require 'src/utils/table'
 local logger = require 'src/utils/logger'
 
 local ServerSideGameClient = {}

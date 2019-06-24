@@ -17,6 +17,10 @@ local function createInMemoryNetwork(gameDefinition, params)
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
   local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
   local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction
+  local latency = params.latency
+  local latencyDeviation = params.latencyDeviation
+  local latencySpikeChance = params.latencySpikeChance
+  local packetLossChance = params.packetLossChance
 
   -- Keep track of transport streams
   local transportStreams = {}
@@ -61,6 +65,12 @@ local function createInMemoryNetwork(gameDefinition, params)
       framesBetweenFlushes = framesBetweenFlushes,
       framesBetweenSmoothing = framesBetweenClientSmoothing,
       exposeGameWithoutPrediction = exposeGameWithoutPrediction
+    })
+    client:simulateNetworkConditions({
+      latency = latency,
+      latencyDeviation = latencyDeviation,
+      latencySpikeChance = latencySpikeChance,
+      packetLossChance = packetLossChance
     })
     table.insert(clients, client)
   end
@@ -128,7 +138,7 @@ local function createLocalhostShareNetwork(gameDefinition, params)
     }),
     framesBetweenFlushes = framesBetweenFlushes,
     framesBetweenSmoothing = framesBetweenClientSmoothing,
-      exposeGameWithoutPrediction = exposeGameWithoutPrediction
+    exposeGameWithoutPrediction = exposeGameWithoutPrediction
   })
 
   -- Return a localhost network that uses share.lua
@@ -258,7 +268,7 @@ local function createNetwork(gameDefinition, params)
 
   -- Make sure we're running with a valid mode
   if mode ~= 'multiplayer' and mode ~= 'development' and mode ~= 'localhost' then
-    logger.error('Invalid mode ' .. (mode or 'nil') .. ' set during network creation, defaulting to development')
+    logger.warn('Invalid mode ' .. (mode or 'nil') .. ' set during network creation, defaulting to development')
     mode = 'development'
   end
 
