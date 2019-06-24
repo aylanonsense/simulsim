@@ -1,4 +1,5 @@
 -- Load dependencies
+local logger = require 'src/utils/logger'
 local LocalTransportStream = require 'src/transport/LocalTransportStream'
 local LocalConnectionListener = require 'src/transport/LocalConnectionListener'
 local LocalConnection = require 'src/transport/LocalConnection'
@@ -244,7 +245,31 @@ end
 
 local function createNetwork(gameDefinition, params)
   params = params or {}
-  local mode = params.mode or 'development'
+  local mode = params.mode
+
+  -- Default to development mode if we're running the game locally, or multiplayer mode otherwise
+  if not mode then
+    if castle and castle.game and castle.game.isLocalFile and not castle.game.isLocalFile() then
+      mode = 'multiplayer'
+    else
+      mode = 'development'
+    end
+  end
+
+  -- Make sure we're running with a valid mode
+  if mode ~= 'multiplayer' and mode ~= 'development' and mode ~= 'localhost' then
+    logger.error('Invalid mode ' .. (mode or 'nil') .. ' set during network creation, defaulting to development')
+    mode = 'development'
+  end
+
+  -- Log out the mode we're running in
+  if mode == 'development' then
+    logger.info('Running in development mode -- will be simulating a multiplayer environment')
+  elseif mode == 'localhost' then
+    logger.info('Running in localhost mode -- will spin up a localhost server and connect to it')
+  elseif mode == 'multiplayer' then
+    logger.info('Running in multiplayer mode -- will attempt to connect to remote server')
+  end
 
   -- Create an in-memory network, which allows for neat things like simulating network conditions
   if mode == 'development' then

@@ -33,7 +33,7 @@ function game.handleEvent(self, eventType, eventData)
   end
 end
 
--- With mode = 'development', simulsim will simulate a multiplayer network in-memory
+-- When running the game locally (or with mode set to 'development'), simulsim will simulate a multiplayer network in-memory
 -- In development mode, you can specify how many clients you'd like to have connect to the server
 -- This lets you preview what your game will look like once it's fully deployed to a remote server!
 local network, server = simulsim.createGameNetwork(game, {
