@@ -249,7 +249,7 @@ local function createNetwork(gameDefinition, params)
 
   -- Default to development mode if we're running the game locally, or multiplayer mode otherwise
   if not mode then
-    if castle and castle.game and castle.game.isLocalFile and not castle.game.isLocalFile() then
+    if CASTLE_SERVER or (castle and castle.game and castle.game.isLocalFile and not castle.game.isLocalFile()) then
       mode = 'multiplayer'
     else
       mode = 'development'
