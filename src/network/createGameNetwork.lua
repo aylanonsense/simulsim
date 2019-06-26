@@ -21,6 +21,8 @@ local function createInMemoryNetwork(gameDefinition, params)
   local latencyDeviation = params.latencyDeviation
   local latencySpikeChance = params.latencySpikeChance
   local packetLossChance = params.packetLossChance
+  local cullRedundantEvents = params.cullRedundantEvents
+  local sendEventRejections = params.sendEventRejections
 
   -- Keep track of transport streams
   local transportStreams = {}
@@ -31,7 +33,8 @@ local function createInMemoryNetwork(gameDefinition, params)
     gameDefinition = gameDefinition,
     listener = listener,
     framesBetweenFlushes = framesBetweenFlushes,
-    framesBetweenSnapshots = framesBetweenServerSnapshots
+    framesBetweenSnapshots = framesBetweenServerSnapshots,
+    sendEventRejections = sendEventRejections
   })
 
   -- Create the clients
@@ -64,7 +67,8 @@ local function createInMemoryNetwork(gameDefinition, params)
       conn = clientConn,
       framesBetweenFlushes = framesBetweenFlushes,
       framesBetweenSmoothing = framesBetweenClientSmoothing,
-      exposeGameWithoutPrediction = exposeGameWithoutPrediction
+      exposeGameWithoutPrediction = exposeGameWithoutPrediction,
+      cullRedundantEvents = cullRedundantEvents
     })
     client:simulateNetworkConditions({
       latency = latency,
@@ -117,6 +121,8 @@ local function createLocalhostShareNetwork(gameDefinition, params)
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
   local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
   local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction
+  local cullRedundantEvents = params.cullRedundantEvents
+  local sendEventRejections = params.sendEventRejections
 
   -- Create the server
   local server = GameServer:new({
@@ -126,7 +132,8 @@ local function createLocalhostShareNetwork(gameDefinition, params)
       port = port
     }),
     framesBetweenFlushes = framesBetweenFlushes,
-    framesBetweenSnapshots = framesBetweenServerSnapshots
+    framesBetweenSnapshots = framesBetweenServerSnapshots,
+    sendEventRejections = sendEventRejections
   })
 
   -- Create the client
@@ -138,7 +145,8 @@ local function createLocalhostShareNetwork(gameDefinition, params)
     }),
     framesBetweenFlushes = framesBetweenFlushes,
     framesBetweenSmoothing = framesBetweenClientSmoothing,
-    exposeGameWithoutPrediction = exposeGameWithoutPrediction
+    exposeGameWithoutPrediction = exposeGameWithoutPrediction,
+    cullRedundantEvents = cullRedundantEvents
   })
 
   -- Return a localhost network that uses share.lua
@@ -172,6 +180,8 @@ local function createServerSideShareNetwork(gameDefinition, params)
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
   local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
   local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction
+  local cullRedundantEvents = params.cullRedundantEvents
+  local sendEventRejections = params.sendEventRejections
 
   -- Create the server
   local server = GameServer:new({
@@ -180,7 +190,8 @@ local function createServerSideShareNetwork(gameDefinition, params)
       isLocalhost = false
     }),
     framesBetweenFlushes = framesBetweenFlushes,
-    framesBetweenSnapshots = framesBetweenServerSnapshots
+    framesBetweenSnapshots = framesBetweenServerSnapshots,
+    sendEventRejections = sendEventRejections
   })
 
   -- Create a fake client
@@ -215,6 +226,8 @@ local function createClientSideShareNetwork(gameDefinition, params)
   local framesBetweenServerSnapshots = params.framesBetweenServerSnapshots
   local framesBetweenClientSmoothing = params.framesBetweenClientSmoothing
   local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction
+  local cullRedundantEvents = params.cullRedundantEvents
+  local sendEventRejections = params.sendEventRejections
 
   -- Create a fake server
   local server = EmptyGameServer:new()
@@ -227,7 +240,8 @@ local function createClientSideShareNetwork(gameDefinition, params)
     }),
     framesBetweenFlushes = framesBetweenFlushes,
     framesBetweenSmoothing = framesBetweenClientSmoothing,
-    exposeGameWithoutPrediction = exposeGameWithoutPrediction
+    exposeGameWithoutPrediction = exposeGameWithoutPrediction,
+    cullRedundantEvents = cullRedundantEvents
   })
 
   -- Return a localhost network that uses share.lua
@@ -259,7 +273,7 @@ local function createNetwork(gameDefinition, params)
 
   -- Default to development mode if we're running the game locally, or multiplayer mode otherwise
   if not mode then
-    if castle and castle.game and castle.game.isLocalFile and not castle.game.isLocalFile() then
+    if CASTLE_SERVER or (castle and castle.game and castle.game.isLocalFile and not castle.game.isLocalFile()) then
       mode = 'multiplayer'
     else
       mode = 'development'
@@ -274,11 +288,15 @@ local function createNetwork(gameDefinition, params)
 
   -- Log out the mode we're running in
   if mode == 'development' then
-    logger.info('Running in development mode -- will be simulating a multiplayer environment')
+    logger.info('Running in development mode -- will simulate a faux multiplayer environment')
   elseif mode == 'localhost' then
     logger.info('Running in localhost mode -- will spin up a localhost server and connect to it')
   elseif mode == 'multiplayer' then
-    logger.info('Running in multiplayer mode -- will attempt to connect to remote server')
+    if CASTLE_SERVER then
+      logger.info('Running in multiplayer mode -- will spin up a server for clients to connect to')
+    else
+      logger.info('Running in multiplayer mode -- will attempt to connect to remote server')
+    end
   end
 
   -- Create an in-memory network, which allows for neat things like simulating network conditions

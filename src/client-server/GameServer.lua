@@ -4,6 +4,8 @@ local GameRunner = require 'src/game/GameRunner'
 local stringUtils = require 'src/utils/string'
 local tableUtils = require 'src/utils/table'
 local logger = require 'src/utils/logger'
+local tableUtils = require 'src/utils/table'
+local constants = require 'src/client-server/gameConstants'
 
 local ServerSideGameClient = {}
 
@@ -65,27 +67,24 @@ function ServerSideGameClient:new(params)
         callback(reason)
       end
     end,
+    _buffer = function(self, messageType, messageContent)
+      self._messageServer:buffer(self._connId, messageType, messageContent)
+      if self._framesBetweenFlushes <= 0 then
+        self._messageServer:flush(self._connId)
+      end
+    end,
     _sendStateSnapshot = function(self)
-      self._messageServer:buffer(self._connId, { 'state-snapshot', self._server:generateStateSnapshotForClient(self) })
+      self:_buffer(constants.STATE_SNAPSHOT, self._server:generateStateSnapshotForClient(self))
     end,
     _sendPingResponse = function(self, pingResponse)
-      self._messageServer:buffer(self._connId, { 'ping-response', pingResponse })
-      if self._framesBetweenFlushes <= 0 then
-        self._messageServer:flush(self._connId)
-      end
+      self:_buffer(constants.PING_RESPONSE, pingResponse)
     end,
     _sendEvent = function(self, event)
-      self._messageServer:buffer(self._connId, { 'event', event })
-      if self._framesBetweenFlushes <= 0 then
-        self._messageServer:flush(self._connId)
-      end
+      self:_buffer(constants.EVENT, event)
     end,
     -- Rejects an event that came from this client
-    _rejectEvent = function(self, event, reason)
-      self._messageServer:buffer(self._connId, { 'reject-event', { event, reason } })
-      if self._framesBetweenFlushes <= 0 then
-        self._messageServer:flush(self._connId)
-      end
+    _rejectEvent = function(self, event)
+      self:_buffer(constants.REJECT_EVENT, event)
     end,
 
     -- Callback methods
@@ -105,6 +104,7 @@ function GameServer:new(params)
   local framesBetweenSnapshots = params.framesBetweenSnapshots or 46
   local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
+  local sendEventRejections = params.sendEventRejections ~= false
 
   -- Create the game
   local runner = GameRunner:new({
@@ -124,11 +124,14 @@ function GameServer:new(params)
     _messageServer = messageServer,
     _nextClientId = 1,
     _clients = {},
+    _clientsById = {},
+    _clientsByConnId = {},
     _runner = runner,
     _framesBetweenFlushes = framesBetweenFlushes,
     _framesBetweenSnapshots = framesBetweenSnapshots,
     _maxClientEventFramesLate = maxClientEventFramesLate,
     _maxClientEventFramesEarly = maxClientEventFramesEarly,
+    _sendEventRejections = sendEventRejections,
     _connectCallbacks = {},
 
     -- Public vars
@@ -145,11 +148,7 @@ function GameServer:new(params)
     end,
     -- Gets a client with the given id
     getClientById = function(self, clientId)
-      for _, client in ipairs(self._clients) do
-        if client.clientId == clientId then
-          return client
-        end
-      end
+      return self._clientsById[clientId]
     end,
     -- Gets the clients that are currently connected to the server
     getClients = function(self)
@@ -200,7 +199,7 @@ function GameServer:new(params)
       return true
     end,
     generateStateSnapshotForClient = function(self, client)
-      return tableUtils.cloneTable(self.game:getState())
+      return tableUtils.cloneTable(self.game:getState()) -- TODO
     end,
 
     -- Callback methods
@@ -210,11 +209,7 @@ function GameServer:new(params)
 
     -- Private methods
     _getClientByConnId = function(self, connId)
-      for i = 1, #self._clients do
-        if self._clients[i]._connId == connId then
-          return self._clients[i], i
-        end
-      end
+      return self._clientsByConnId[connId]
     end,
     _addServerMetadata = function(self, obj)
       obj.serverMetadata = {
@@ -239,6 +234,8 @@ function GameServer:new(params)
         client.data = clientData
         -- Insert the client into the list of clients
         table.insert(self._clients, client)
+        self._clientsById[client.clientId] = client
+        self._clientsByConnId[connId] = client
         -- Accept the connection
         accept({ clientId, clientData or {}, self:generateStateSnapshotForClient(client) })
         -- Trigger connect callbacks
@@ -253,11 +250,18 @@ function GameServer:new(params)
       self:handleConnectRequest(client, handshake, accept2, reject2)
     end,
     _handleDisconnect = function(self, connId, reason)
-      local client, i = self:_getClientByConnId(connId)
+      local client = self:_getClientByConnId(connId)
       if client then
         logger.info('Server disconnecting client ' .. client.clientId .. ': ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
         -- Remove the client
-        table.remove(self._clients, i)
+        self._clientsById[client.clientId] = nil
+        self._clientsByConnId[connId] = nil
+        for i = #self._clients, 1, -1 do
+          if self._clients[i]._connId == connId then
+            table.remove(self._clients, i)
+            break
+          end
+        end
         -- Trigger the client's disconnect callbacks
         client:_handleDisconnect(reason or 'Connection terminated')
       end
@@ -265,11 +269,11 @@ function GameServer:new(params)
     _handleReceive = function(self, connId, messageType, messageContent)
       local client = self:_getClientByConnId(connId)
       if client then
-        if messageType == 'event' then
+        if messageType == constants.EVENT then
           -- Add some metadata onto the event recording the fact that it was received
           local event = self:_addServerMetadata(messageContent)
           local eventApplied = false
-          local rejectReason
+          -- local rejectReason
           if self:shouldAcceptEventFromClient(client, event) then
             local frameOffset = event.frame - self.game.frame - 1 -- positive is early, negative is late
             local maxFramesEarly = self._maxClientEventFramesEarly
@@ -287,7 +291,7 @@ function GameServer:new(params)
             if not isTooEarly and not isTooLate then
               if event.isInputEvent and event.type == 'set-inputs' and self.game.frameOfLastInput[client.clientId] and self.game.frameOfLastInput[client.clientId] > event.frame then
                 logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because newer inputs have already been applied [frame=' .. self.game.frame .. ']')
-                rejectReason = 'Newer inputs have already been applied'
+                -- rejectReason = 'Newer inputs have already been applied'
               else
                 event.serverMetadata.proposedEventFrame = event.frame
                 -- Apply the event server-side and let all clients know about it
@@ -298,21 +302,21 @@ function GameServer:new(params)
                 eventApplied = self:_applyEvent(event)
                 if not eventApplied then
                   logger.silly('Server failed to apply "' .. event.type .. '" event from client ' .. client.clientId .. ' [frame=' .. self.game.frame .. ']')
-                  rejectReason = 'Failed to apply event'
+                  -- rejectReason = 'Failed to apply event'
                 end
               end
             else
               logger.silly('Server rejecting "' .. event.type .. '" event from client ' .. client.clientId .. ' because it was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'early' or 'late') .. ' [frame=' .. self.game.frame .. ']')
-              rejectReason = 'Event was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'early' or 'late')
+              -- rejectReason = 'Event was ' .. math.abs(frameOffset) .. ' ' .. (math.abs(frameOffset) == 1 and 'frame' or 'frames') .. ' ' .. (isTooEarly and 'early' or 'late')
             end
-          else
-            rejectReason = 'Server decided not to accept events from client'
+          -- else
+          --   rejectReason = 'Server decided not to accept events from client'
           end
-          if not eventApplied then
+          if not eventApplied and self._sendEventRejections then
             -- Let the client know that their event was rejected or wasn't able to be applied
-            client:_rejectEvent(event, rejectReason)
+            client:_rejectEvent(event)
           end
-        elseif messageType == 'ping' then
+        elseif messageType == constants.PING then
           local pingResponse = self:_addServerMetadata(messageContent)
           pingResponse.frame = self.game.frame
           client:_sendPingResponse(pingResponse)
@@ -342,8 +346,8 @@ function GameServer:new(params)
   messageServer:onDisconnect(function(connId, reason)
     server:_handleDisconnect(connId, reason)
   end)
-  messageServer:onReceive(function(connId, msg)
-    server:_handleReceive(connId, msg[1], msg[2])
+  messageServer:onReceive(function(connId, messageType, messageContent)
+    server:_handleReceive(connId, messageType, messageContent)
   end)
 
   return server
