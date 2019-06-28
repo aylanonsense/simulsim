@@ -21,6 +21,7 @@ function GameClient:new(params)
   local framesBetweenStateSnapshots = params.framesBetweenStateSnapshots or 21
   local exposeGameWithoutPrediction = params.exposeGameWithoutPrediction == true
   local cullRedundantEvents = params.cullRedundantEvents ~= false
+  local checkForNilEntities = params.checkForNilEntities == true
 
   -- Create a game for the client and a runner for it
   local runner = GameRunner:new({
@@ -83,6 +84,7 @@ function GameClient:new(params)
     _framesBetweenPings = framesBetweenPings,
     _framesBetweenSmoothing = framesBetweenSmoothing,
     _maxFramesOfLatency = maxFramesOfLatency,
+    _checkForNilEntities = checkForNilEntities,
     _connectCallbacks = {},
     _connectFailureCallbacks = {},
     _disconnectCallbacks = {},
@@ -233,6 +235,15 @@ function GameClient:new(params)
 
     -- Overrideable methods
     syncEntity = function(self, game, entity, candidateEntity, isPrediction)
+      if self._checkForNilEntities then
+        if not entity and not candidateEntity then
+          logger.error('Entity and candidate entity in syncEntity are both nil [frame=' .. game.frame .. ']')
+        elseif entity and not game:getEntityId(entity) then
+          logger.error('Entity in syncEntity has a nil id [frame=' .. game.frame .. ']')
+        elseif candidateEntity and not game:getEntityId(candidateEntity) then
+          logger.error('Candidate entity in syncEntity has a nil id [frame=' .. game.frame .. ']')
+        end
+      end
       local isEntityUsingPrediction
       if entity then
         isEntityUsingPrediction = self:isEntityUsingPrediction(entity, self.clientId)
@@ -240,10 +251,12 @@ function GameClient:new(params)
         isEntityUsingPrediction = self:isEntityUsingPrediction(candidateEntity, self.clientId)
       end
       if isEntityUsingPrediction == isPrediction then
-        if entity then
+        if candidateEntity and entity then
           return game:copyEntityProps(candidateEntity, entity)
-        else
+        elseif candidateEntity then
           return game:cloneEntity(candidateEntity)
+        else
+          return nil
         end
       else
         return entity
@@ -288,6 +301,8 @@ function GameClient:new(params)
         return game:copyEntityProps(idealEntity, entity)
       elseif idealEntity then
         return game:cloneEntity(idealEntity)
+      else
+        return nil
       end
     end,
     smoothInputs = function(self, game, inputs, idealInputs)
@@ -349,6 +364,15 @@ function GameClient:new(params)
       end
       self._runnerWithoutSmoothing:reset()
       self._runnerWithoutSmoothing:setState(state)
+      if self._checkForNilEntities then
+        for _, entity in ipairs(self.gameWithoutSmoothing.entities) do
+          if not entity then
+            logger.error('State in _setInitialState has a nil entity [frame=' .. self.gameWithoutSmoothing.frame .. ']')
+          elseif not self.gameWithoutSmoothing:getEntityId(entity) then
+            logger.error('State in _setInitialState has an entity with a nil id [frame=' .. self.gameWithoutSmoothing.frame .. ']')
+          end
+        end
+      end
       if not wasStable and self:isStable() then
         self:_handleStabilize()
       end
@@ -420,6 +444,13 @@ function GameClient:new(params)
       -- Sync entities that exist in the target game
       local entityExistsInTargetGame = {}
       for _, targetEntity in ipairs(targetGame.entities) do
+        if self._checkForNilEntities then
+          if not targetEntity then
+            logger.error('Target game in _syncToTargetGame has a nil entity [frame=' .. targetGame.frame .. ']')
+          elseif not sourceGame:getEntityId(targetEntity) then
+            logger.error('Target game in _syncToTargetGame has an entity with a nil id [frame=' .. targetGame.frame .. ']')
+          end
+        end
         local id = targetGame:getEntityId(targetEntity)
         entityExistsInTargetGame[id] = true
         local sourceEntity = sourceGame:getEntityById(id)
@@ -439,6 +470,13 @@ function GameClient:new(params)
       end
       -- Sync entities that don't exist in the target game
       for _, sourceEntity in ipairs(sourceGame.entities) do
+        if self._checkForNilEntities then
+          if not sourceEntity then
+            logger.error('Source game in _syncToTargetGame has a nil entity [frame=' .. sourceGame.frame .. ']')
+          elseif not sourceGame:getEntityId(sourceEntity) then
+            logger.error('Source game in _syncToTargetGame has an entity with a nil id [frame=' .. sourceGame.frame .. ']')
+          end
+        end
         local id = sourceGame:getEntityId(sourceEntity)
         if not entityExistsInTargetGame[id] and sourceGame:isSyncEnabledForEntity(sourceEntity) then
           local syncedEntity = self:syncEntity(sourceGame, sourceEntity, nil, isPrediction)
@@ -468,6 +506,15 @@ function GameClient:new(params)
         end
         local sourceGame = self.gameWithoutSmoothing
         local targetGame = self._gameDefinition:new({ initialState = state })
+        if self._checkForNilEntities then
+          for _, entity in ipairs(targetGame.entities) do
+            if not entity then
+              logger.error('State in _handleStateSnapshot has a nil entity [frame=' .. targetGame.frame .. ']')
+            elseif not targetGame:getEntityId(entity) then
+              logger.error('State in _handleStateSnapshot has an entity with a nil id [frame=' .. targetGame.frame .. ']')
+            end
+          end
+        end
         -- Fix client-predicted inconsistencies in the past
         self._runnerWithoutSmoothing:applyStateTransform(frame - self._framesOfLatency, function(game)
           self:_syncToTargetGame(sourceGame, targetGame, true)
@@ -489,6 +536,13 @@ function GameClient:new(params)
       -- Smooth entities
       local entityExistsInTargetGame = {}
       for _, targetEntity in ipairs(targetGame.entities) do
+        if self._checkForNilEntities then
+          if not targetEntity then
+            logger.error('Target game in _smoothGame has a nil entity [frame=' .. targetGame.frame .. ']')
+          elseif not targetGame:getEntityId(targetEntity) then
+            logger.error('Target game in _smoothGame has an entity with a nil id [frame=' .. targetGame.frame .. ']')
+          end
+        end
         local id = targetGame:getEntityId(targetEntity)
         entityExistsInTargetGame[id] = true
         local sourceEntity = sourceGame:getEntityById(id)
@@ -505,6 +559,13 @@ function GameClient:new(params)
       end
       -- Sync entities that don't exist in the target game
       for _, sourceEntity in ipairs(sourceGame.entities) do
+        if self._checkForNilEntities then
+          if not sourceEntity then
+            logger.error('Source game in _smoothGame has a nil entity [frame=' .. sourceGame.frame .. ']')
+          elseif not sourceGame:getEntityId(sourceEntity) then
+            logger.error('Source game in _smoothGame has an entity with a nil id [frame=' .. sourceGame.frame .. ']')
+          end
+        end
         local id = sourceGame:getEntityId(sourceEntity)
         if not entityExistsInTargetGame[id] then
           local smoothedEntity
