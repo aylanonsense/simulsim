@@ -12,6 +12,7 @@ function Game:new(params)
     _nextEntityId = 1,
     _entityIndex = {},
     _reusedStateObj = { entities = {} },
+    _triggerCallbacks = {},
 
     -- Public vars
     frame = 0,
@@ -53,6 +54,11 @@ function Game:new(params)
       end
       if state.frameOfLastInput then
         self.frameOfLastInput = state.frameOfLastInput
+      end
+    end,
+    trigger = function(self, triggerName, triggerData)
+      for _, callback in ipairs(self._triggerCallbacks) do
+        callback(triggerName, triggerData)
       end
     end,
     cloneEntity = function(self, entity)
@@ -255,6 +261,9 @@ function Game:new(params)
     end,
     unindexEntityId = function(self, entityId)
       self._entityIndex[entityId] = nil
+    end,
+    onTrigger = function(self, callback)
+      table.insert(self._triggerCallbacks, callback)
     end,
 
     -- Methods to override

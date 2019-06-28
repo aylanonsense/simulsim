@@ -24,27 +24,29 @@ function GameClient:new(params)
   local checkForNilEntities = params.checkForNilEntities == true
 
   -- Create a game for the client and a runner for it
+  local game = gameDefinition:new()
   local runner = GameRunner:new({
-    game = gameDefinition:new(),
+    game = game,
     isRenderable = true,
     allowTimeManipulation = false
   })
+  local gameWithoutSmoothing = gameDefinition:new()
   local runnerWithoutSmoothing = GameRunner:new({
-    game = gameDefinition:new(),
+    game = gameWithoutSmoothing,
     isRenderable = false,
     framesBetweenStateSnapshots = framesBetweenStateSnapshots,
     snapshotGenerationOffset = 0
   })
-  local runnerWithoutPrediction
   local gameWithoutPrediction
+  local runnerWithoutPrediction
   if exposeGameWithoutPrediction then
+    gameWithoutPrediction = gameDefinition:new()
     runnerWithoutPrediction = GameRunner:new({
-      game = gameDefinition:new(),
+      game = gameWithoutPrediction,
       isRenderable = false,
       framesBetweenStateSnapshots = framesBetweenStateSnapshots,
       snapshotGenerationOffset = math.floor(framesBetweenStateSnapshots / 2)
     })
-    gameWithoutPrediction = runnerWithoutPrediction.game
   end
 
   -- Create guesstimators to minimize time desync and latency
@@ -85,6 +87,7 @@ function GameClient:new(params)
     _framesBetweenSmoothing = framesBetweenSmoothing,
     _maxFramesOfLatency = maxFramesOfLatency,
     _checkForNilEntities = checkForNilEntities,
+    _gameTriggerCallbacks = {},
     _connectCallbacks = {},
     _connectFailureCallbacks = {},
     _disconnectCallbacks = {},
@@ -94,8 +97,8 @@ function GameClient:new(params)
     -- Public vars
     clientId = nil,
     data = {},
-    game = runner.game,
-    gameWithoutSmoothing = runnerWithoutSmoothing.game,
+    game = game,
+    gameWithoutSmoothing = gameWithoutSmoothing,
     gameWithoutPrediction = gameWithoutPrediction,
 
     -- Public methods
@@ -319,6 +322,9 @@ function GameClient:new(params)
     end,
 
     -- Callback methods
+    onGameTrigger = function(self, callback)
+      table.insert(self._gameTriggerCallbacks, callback)
+    end,
     onConnect = function(self, callback)
       table.insert(self._connectCallbacks, callback)
     end,
@@ -341,6 +347,11 @@ function GameClient:new(params)
       -- Flush immediately if we have no auto-flushing
       if self._framesBetweenFlushes <= 0 then
         self._messageClient:flush()
+      end
+    end,
+    _handleGameTrigger = function(self, triggerName, triggerData)
+      for _, callback in ipairs(self._gameTriggerCallbacks) do
+        callback(triggerName, triggerData)
       end
     end,
     _handleConnect = function(self, connectionData)
@@ -718,6 +729,9 @@ function GameClient:new(params)
   }
 
   -- Bind events
+  game:onTrigger(function(triggerName, triggerData)
+    client:_handleGameTrigger(triggerName, triggerData)
+  end)
   messageClient:onConnect(function(connectionData)
     client:_handleConnect(connectionData)
   end)

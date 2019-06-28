@@ -51,6 +51,11 @@ local function bindServerToAPI(server, api)
   end
 
   -- Bind events
+  server:onGameTrigger(function(triggerName, triggerData)
+    if api.gametriggered then
+      api.gametriggered(server, triggerName, triggerData)
+    end
+  end)
   server:onConnect(function(client)
     if api.clientconnected then
       api.clientconnected(server, client)
@@ -83,6 +88,11 @@ local function bindClientToAPI(client, api)
   end
 
   -- Bind events
+  client:onGameTrigger(function(triggerName, triggerData)
+    if api.gametriggered then
+      api.gametriggered(client, triggerName, triggerData)
+    end
+  end)
   client:onConnect(function()
     if api.connected then
       api.connected(client)
