@@ -678,10 +678,10 @@ function GameClient:new(params)
     end,
     _setFramesOfLatency = function(self, framesOfLatency)
       self._framesOfLatency = framesOfLatency
-      self.game:setTemporarySyncDisableDuration(framesOfLatency + 5)
-      self.gameWithoutSmoothing:setTemporarySyncDisableDuration(framesOfLatency + 5)
+      self.game:setTemporarySyncDisableDuration(framesOfLatency + 3)
+      self.gameWithoutSmoothing:setTemporarySyncDisableDuration(framesOfLatency + 3)
       if self.gameWithoutPrediction then
-        self.gameWithoutPrediction:setTemporarySyncDisableDuration(framesOfLatency + 5)
+        self.gameWithoutPrediction:setTemporarySyncDisableDuration(framesOfLatency + 3)
       end
     end,
     _handleChangeFrameOffset = function(self, offset, prevOffset)
