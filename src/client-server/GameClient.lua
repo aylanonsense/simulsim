@@ -580,7 +580,11 @@ function GameClient:new(params)
         local sourceEntity = sourceGame:getEntityById(id)
         local smoothedEntity
         if isStable or not sourceEntity then
+          local id = sourceEntity.id
           smoothedEntity = self:smoothEntity(sourceGame, sourceEntity, targetEntity)
+          if id and not sourceEntity.id then
+            print('Entity with id ' .. id .. ' lost entity id after smoothing')
+          end
         else
           smoothedEntity = sourceEntity
         end
