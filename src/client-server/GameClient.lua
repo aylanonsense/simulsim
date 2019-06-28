@@ -309,6 +309,9 @@ function GameClient:new(params)
       end
     end,
     smoothEntity = function(self, game, entity, idealEntity)
+      if entity and idealEntity and entity == idealEntity then
+        print('ENTITY AND IDEAL ENTITY ARE ONE AND THE SAME')
+      end
       local id1 = entity and entity.id
       local id2 = idealEntity and idealEntity.id
       local smoothedEntity
