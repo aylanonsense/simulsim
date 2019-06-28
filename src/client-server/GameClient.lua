@@ -702,7 +702,7 @@ function GameClient:new(params)
       if self._hasSetInitialState then
         -- Fast forward if we're behind the states the server is sending us
         if frameOffsetAdjustment > 90 then
-          logger.info(clientLabel .. ' destabilized due to being too far behind the server [frame=' .. self.game.frame .. ']')
+          logger.debug(clientLabel .. ' destabilized due to being too far behind the server [frame=' .. self.game.frame .. ']')
           self:_handleDestabilize()
         elseif frameOffsetAdjustment > 0 then
           logger.debug(clientLabel .. ' fast forwarding ' .. frameOffsetAdjustment .. ' frames to sync with server [frame=' .. self.game.frame .. ']')
@@ -711,12 +711,12 @@ function GameClient:new(params)
             fastForwardSuccessful = fastForwardSuccessful and self._runnerWithoutPrediction:fastForward(frameOffsetAdjustment)
           end
           if not fastForwardSuccessful then
-            logger.info(clientLabel .. ' destabilized due to failed fast forward [frame=' .. self.game.frame .. ']')
+            logger.debug(clientLabel .. ' destabilized due to failed fast forward [frame=' .. self.game.frame .. ']')
             self:_handleDestabilize()
           end
         -- Rewind if we're ahead of the states the server is sending us
         elseif frameOffsetAdjustment < -90 then
-          logger.info(clientLabel .. ' destabilized due to being too far ahead of the server [frame=' .. self.game.frame .. ']')
+          logger.debug(clientLabel .. ' destabilized due to being too far ahead of the server [frame=' .. self.game.frame .. ']')
           self:_handleDestabilize()
         elseif frameOffsetAdjustment < 0 then
           logger.debug(clientLabel .. ' rewinding ' .. (-frameOffsetAdjustment) .. ' frames to sync with server [frame=' .. self.game.frame .. ']')
@@ -725,7 +725,7 @@ function GameClient:new(params)
             rewindSuccessful = rewindSuccessful and self._runnerWithoutPrediction:rewind(-frameOffsetAdjustment)
           end
           if not rewindSuccessful then
-            logger.info(clientLabel .. ' destabilized due to failed rewind [frame=' .. self.game.frame .. ']')
+            logger.debug(clientLabel .. ' destabilized due to failed rewind [frame=' .. self.game.frame .. ']')
             self:_handleDestabilize()
           end
         end
