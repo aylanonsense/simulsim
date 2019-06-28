@@ -309,13 +309,23 @@ function GameClient:new(params)
       end
     end,
     smoothEntity = function(self, game, entity, idealEntity)
+      local id1 = entity and entity.id
+      local id2 = idealEntity and idealEntity.id
+      local smoothedEntity
       if entity and idealEntity then
-        return game:copyEntityProps(idealEntity, entity)
+        smoothedEntity = game:copyEntityProps(idealEntity, entity)
       elseif idealEntity then
-        return game:cloneEntity(idealEntity)
+        smoothedEntity = game:cloneEntity(idealEntity)
       else
-        return nil
+        smoothedEntity = nil
       end
+      if smoothedEntity and not smoothedEntity.id then
+        print('smooth entity produced entity without an id')
+        print('used to have:')
+        print(id1)
+        print(id2)
+      end
+      return smoothEntity
     end,
     smoothInputs = function(self, game, inputs, idealInputs)
       return tableUtils.copyProps(idealInputs, tableUtils.clearProps(inputs))
