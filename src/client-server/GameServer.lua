@@ -107,8 +107,9 @@ function GameServer:new(params)
   local sendEventRejections = params.sendEventRejections ~= false
 
   -- Create the game
+  local game = gameDefinition:new()
   local runner = GameRunner:new({
-    game = gameDefinition:new(),
+    game = game,
     isRenderable = false,
     allowTimeManipulation = false,
     framesOfHistory = 0
@@ -132,10 +133,11 @@ function GameServer:new(params)
     _maxClientEventFramesLate = maxClientEventFramesLate,
     _maxClientEventFramesEarly = maxClientEventFramesEarly,
     _sendEventRejections = sendEventRejections,
+    _gameTriggerCallbacks = {},
     _connectCallbacks = {},
 
     -- Public vars
-    game = runner.game,
+    game = game,
 
     -- Public methods
     -- Starts the server listening for new client connections
@@ -203,11 +205,19 @@ function GameServer:new(params)
     end,
 
     -- Callback methods
+    onGameTrigger = function(self, callback)
+      table.insert(self._gameTriggerCallbacks, callback)
+    end,
     onConnect = function(self, callback)
       table.insert(self._connectCallbacks, callback)
     end,
 
     -- Private methods
+    _handleGameTrigger = function(self, triggerName, triggerData)
+      for _, callback in ipairs(self._gameTriggerCallbacks) do
+        callback(triggerName, triggerData)
+      end
+    end,
     _getClientByConnId = function(self, connId)
       return self._clientsByConnId[connId]
     end,
@@ -340,6 +350,9 @@ function GameServer:new(params)
   }
 
   -- Bind events
+  game:onTrigger(function(triggerName, triggerData)
+    server:_handleGameTrigger(triggerName, triggerData)
+  end)
   messageServer.handleConnectRequest = function(self, connId, handshake, accept, reject)
     server:_handleConnectRequest(connId, handshake, accept, reject)
   end
