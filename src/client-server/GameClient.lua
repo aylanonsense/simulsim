@@ -552,6 +552,15 @@ function GameClient:new(params)
       local isStable = self._hasSetInitialState and self._hasInitializedFrameOffset and self._hasInitializedLatency
       local sourceGame = self.game
       local targetGame = self.gameWithoutSmoothing
+      if self._checkForNilEntities then
+        for _, sourceEntity in ipairs(sourceGame.entities) do
+          if not sourceEntity then
+            logger.error('Source game in _smoothGame has a nil entity prior to doing any work [frame=' .. sourceGame.frame .. ']')
+          elseif not sourceGame:getEntityId(sourceEntity) then
+            logger.error('Source game in _smoothGame has an entity with a nil id prior to doing any work [frame=' .. sourceGame.frame .. ']')
+          end
+        end
+      end
       local entityIndex = {}
       local entities = {}
       -- Just copy the current frame
