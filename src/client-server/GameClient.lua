@@ -595,7 +595,7 @@ function GameClient:new(params)
       local predictClientSide
       if not event.clientMetadata or event.clientMetadata.clientId ~= self.clientId then
         if self:isEventUsingPrediction(event, false) then
-          event.frame = event.frame - framesOfLatency
+          event.frame = event.frame - self._framesOfLatency
         end
       end
       if event.frame > self._runner.game.frame then
