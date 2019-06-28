@@ -136,8 +136,9 @@ function Game:new(params)
       end
     end,
     -- Spawns a new entity, generating a new id for it
-    spawnEntity = function(self, entity, params)
+    spawnEntity = function(self, entityData, params)
       params = params or {}
+      local entity = tableUtils.cloneTable(entityData)
       local shouldGenerateId
       if params.shouldGenerateId ~= nil then
         shouldGenerateId = params.shouldGenerateId
