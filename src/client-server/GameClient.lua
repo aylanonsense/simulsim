@@ -358,7 +358,7 @@ function GameClient:new(params)
       self.clientId = connectionData[1]
       logger.info('Client ' .. self.clientId .. ' connected to server [frame=' .. connectionData[3].frame .. ']')
       self.data = connectionData[2]
-      self._setFramesOfLatency(20)
+      self:_setFramesOfLatency(20)
       self:_setInitialState(connectionData[3])
       -- Trigger connect callbacks
       for _, callback in ipairs(self._connectCallbacks) do
