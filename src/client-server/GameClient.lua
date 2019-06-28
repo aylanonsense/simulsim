@@ -463,12 +463,15 @@ function GameClient:new(params)
         else
           isSyncEnabled = targetGame:isSyncEnabledForEntity(targetEntity)
         end
+        local syncedEntity
         if isSyncEnabled then
-          local syncedEntity = self:syncEntity(sourceGame, sourceEntity, targetEntity, isPrediction)
-          if syncedEntity then
-            entityIndex[id] = syncedEntity
-            table.insert(entities, syncedEntity)
-          end
+          syncedEntity = self:syncEntity(sourceGame, sourceEntity, targetEntity, isPrediction)
+        else
+          syncedEntity = sourceEntity
+        end
+        if syncedEntity then
+          entityIndex[id] = syncedEntity
+          table.insert(entities, syncedEntity)
         end
       end
       -- Sync entities that don't exist in the target game
@@ -481,8 +484,13 @@ function GameClient:new(params)
           end
         end
         local id = sourceGame:getEntityId(sourceEntity)
-        if not entityExistsInTargetGame[id] and sourceGame:isSyncEnabledForEntity(sourceEntity) then
-          local syncedEntity = self:syncEntity(sourceGame, sourceEntity, nil, isPrediction)
+        if not entityExistsInTargetGame[id] then
+          local syncedEntity
+          if sourceGame:isSyncEnabledForEntity(sourceEntity) then
+            syncedEntity = self:syncEntity(sourceGame, sourceEntity, nil, isPrediction)
+          else
+            syncedEntity = sourceEntity
+          end
           if syncedEntity then
             entityIndex[id] = syncedEntity
             table.insert(entities, syncedEntity)
