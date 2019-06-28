@@ -268,11 +268,7 @@ local function createPublicAPI(network, params)
   end
 
   -- Bind uiupdate callback
-  local originalMethod = castle.uiupdate
   networkAPI.uiupdate = function(...)
-    if originalMethod then
-      originalMethod(...)
-    end
     if network:isClientSide() and clientAPI.uiupdate then
       for _, client in ipairs(network.clients) do
         clientAPI.uiupdate(client, ...)
