@@ -182,6 +182,18 @@ function GameClient:new(params)
       self._frameOffsetGuesstimator:update(dt)
     end,
     moveForwardOneFrame = function(self, dt)
+      for _, entity in ipairs(self.game.entities) do
+        if not entity.id then
+          print('Game has entity without id [frame=' .. self.game.frame .. ']')
+          print(stringUtils.stringify(entity))
+        end
+      end
+      for _, entity in ipairs(self.gameWithoutSmoothing.entities) do
+        if not entity.id then
+          print('Game without smoothing has entity without id [frame=' .. self.gameWithoutSmoothing.frame .. ']')
+          print(stringUtils.stringify(entity))
+        end
+      end
       self._clientFrame = self._clientFrame + 1
       self._framesSinceSetInputs = self._framesSinceSetInputs + 1
       -- Update the game (via the game runner)

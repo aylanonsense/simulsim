@@ -151,6 +151,7 @@ function Game:new(params)
       -- Add the entity to the game
       self._entityIndex[self:getEntityId(entity)] = entity
       table.insert(self.entities, entity)
+      print('Spawned entity with id=' .. (entity.id or 'nil') .. ' [frame=' .. self.frame .. ']')
       return entity
     end,
     -- Despawns an entity
