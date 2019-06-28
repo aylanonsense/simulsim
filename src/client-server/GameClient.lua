@@ -121,7 +121,6 @@ function GameClient:new(params)
     fireEvent = function(self, eventType, eventData, params)
       params = params or {}
       local isInputEvent = params.isInputEvent
-      local predictClientSide = params.predictClientSide ~= false
       local maxFramesLate = params.maxFramesLate or 0
       local maxFramesEarly = params.maxFramesEarly or 20
       local applyImmediatelyWhenEarly = params.applyImmediatelyWhenEarly == true
@@ -137,6 +136,7 @@ function GameClient:new(params)
         event.clientMetadata.maxFramesLate = maxFramesLate
         event.clientMetadata.maxFramesEarly = maxFramesEarly
         event.clientMetadata.applyImmediatelyWhenEarly = applyImmediatelyWhenEarly
+        local predictClientSide = params.predictClientSide == nil and self:isEventUsingPrediction(event, true) or params.predictClientSide
         -- Apply a prediction of the event
         if predictClientSide then
           local serverEvent = tableUtils.cloneTable(event)
@@ -314,6 +314,9 @@ function GameClient:new(params)
     isEntityUsingPrediction = function(self, entity)
       return entity and entity.clientId == self.clientId
     end,
+    isEventUsingPrediction = function(self, event, firedByClient)
+      return firedByClient
+    end,
 
     -- Callback methods
     onConnect = function(self, callback)
@@ -460,12 +463,15 @@ function GameClient:new(params)
         else
           isSyncEnabled = targetGame:isSyncEnabledForEntity(targetEntity)
         end
+        local syncedEntity
         if isSyncEnabled then
-          local syncedEntity = self:syncEntity(sourceGame, sourceEntity, targetEntity, isPrediction)
-          if syncedEntity then
-            entityIndex[id] = syncedEntity
-            table.insert(entities, syncedEntity)
-          end
+          syncedEntity = self:syncEntity(sourceGame, sourceEntity, targetEntity, isPrediction)
+        else
+          syncedEntity = sourceEntity
+        end
+        if syncedEntity then
+          entityIndex[id] = syncedEntity
+          table.insert(entities, syncedEntity)
         end
       end
       -- Sync entities that don't exist in the target game
@@ -478,8 +484,13 @@ function GameClient:new(params)
           end
         end
         local id = sourceGame:getEntityId(sourceEntity)
-        if not entityExistsInTargetGame[id] and sourceGame:isSyncEnabledForEntity(sourceEntity) then
-          local syncedEntity = self:syncEntity(sourceGame, sourceEntity, nil, isPrediction)
+        if not entityExistsInTargetGame[id] then
+          local syncedEntity
+          if sourceGame:isSyncEnabledForEntity(sourceEntity) then
+            syncedEntity = self:syncEntity(sourceGame, sourceEntity, nil, isPrediction)
+          else
+            syncedEntity = sourceEntity
+          end
           if syncedEntity then
             entityIndex[id] = syncedEntity
             table.insert(entities, syncedEntity)
@@ -589,6 +600,12 @@ function GameClient:new(params)
       sourceGame.data = self:smoothData(sourceGame, sourceGame.data, targetGame.data)
     end,
     _applyEvent = function(self, event, params)
+      local predictClientSide
+      if not event.clientMetadata or event.clientMetadata.clientId ~= self.clientId then
+        if self:isEventUsingPrediction(event, false) then
+          event.frame = event.frame - self._framesOfLatency
+        end
+      end
       if event.frame > self._runner.game.frame then
         self._runner:applyEvent(event, params)
       end

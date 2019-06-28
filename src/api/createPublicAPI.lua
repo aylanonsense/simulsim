@@ -70,7 +70,7 @@ end
 
 local function bindClientToAPI(client, api)
   -- Allow for certain client methods to be overridden
-  local overrideableMethods = { 'syncEntity', 'syncInputs', 'syncData', 'smoothEntity', 'smoothInputs', 'smoothData', 'isEntityUsingPrediction' }
+  local overrideableMethods = { 'syncEntity', 'syncInputs', 'syncData', 'smoothEntity', 'smoothInputs', 'smoothData', 'isEntityUsingPrediction', 'isEventUsingPrediction' }
   for _, methodName in ipairs(overrideableMethods) do
     local originalMethod = client[methodName]
     client[methodName] = function(...)
