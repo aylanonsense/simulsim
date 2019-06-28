@@ -13,6 +13,7 @@ function Game:new(params)
     _entityIndex = {},
     _reusedStateObj = { entities = {} },
     _triggerCallbacks = {},
+    _temporarySyncDisableDuration = 60,
 
     -- Public vars
     frame = 0,
@@ -234,7 +235,10 @@ function Game:new(params)
       if not entity._metadata then
         entity._metadata = {}
       end
-      entity._metadata.syncDisabledFrames = 150 -- TODO calculate an actual number
+      entity._metadata.syncDisabledFrames = self._temporarySyncDisableDuration
+    end,
+    setTemporarySyncDisableDuration = function(self, duration)
+      self._temporarySyncDisableDuration = duration
     end,
     updateEntityMetadata = function(self, dt)
       for _, entity in ipairs(self.entities) do
