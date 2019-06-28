@@ -592,9 +592,11 @@ function GameClient:new(params)
       sourceGame.data = self:smoothData(sourceGame, sourceGame.data, targetGame.data)
     end,
     _applyEvent = function(self, event, params)
-      local predictClientSide = self:isEventUsingPrediction(event, false)
-      if predictClientSide then
-        event.frame = event.frame - framesOfLatency
+      local predictClientSide
+      if not event.clientMetadata or event.clientMetadata.clientId ~= self.clientId then
+        if self:isEventUsingPrediction(event, false) then
+          event.frame = event.frame - framesOfLatency
+        end
       end
       if event.frame > self._runner.game.frame then
         self._runner:applyEvent(event, params)
