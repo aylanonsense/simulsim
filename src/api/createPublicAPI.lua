@@ -4,6 +4,7 @@ local FRAME_RATE = 60
 local OVERRIDEABLE_LOVE_METHODS = {
   load = { server = true, client = true },
   update = { server = true, client = true },
+  uiupdate = { client = true },
   draw = { client = true },
   lowmemory = { server = true, client = true },
   quit = { server = true, client = true },
@@ -266,10 +267,26 @@ local function createPublicAPI(network, params)
     end
   end
 
+  -- Bind uiupdate callback
+  local originalMethod = castle.uiupdate
+  networkAPI.uiupdate = function(...)
+    if originalMethod then
+      originalMethod(...)
+    end
+    if network:isClientSide() and clientAPI.uiupdate then
+      for _, client in ipairs(network.clients) do
+        clientAPI.uiupdate(client, ...)
+      end
+    end
+  end
+
   -- Bind background update event (so simulsim can update even in the background)
   if overrideCallbackMethods then
     castle.backgroundupdate = function(...)
       networkAPI.update(...)
+    end
+    castle.uiupdate = function(...)
+      networkAPI.uiupdate(...)
     end
   end
 
