@@ -358,7 +358,7 @@ function GameClient:new(params)
       self.clientId = connectionData[1]
       logger.info('Client ' .. self.clientId .. ' connected to server [frame=' .. connectionData[3].frame .. ']')
       self.data = connectionData[2]
-      self._framesOfLatency = 20
+      self._setFramesOfLatency(20)
       self:_setInitialState(connectionData[3])
       -- Trigger connect callbacks
       for _, callback in ipairs(self._connectCallbacks) do
@@ -414,7 +414,7 @@ function GameClient:new(params)
     end,
     _handleDisconnect = function(self, reason)
       logger.info('Client ' .. self.clientId .. ' disconnected from server: ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
-      self._framesOfLatency = 0
+      self:_setFramesOfLatency(0)
       self._hasSetInitialState = false
       -- Trigger disconnect callbacks
       for _, callback in ipairs(self._disconnectCallbacks) do
@@ -670,10 +670,18 @@ function GameClient:new(params)
           logger.debug(clientLabel .. ' adjusting latency from ' .. self._framesOfLatency .. ' to ' .. framesOfLatency .. ' frames (' .. (change >= 0 and '+' .. change or change) .. ') [frame=' .. self.game.frame .. ']')
         end
       end
-      self._framesOfLatency = framesOfLatency
+      self:_setFramesOfLatency(framesOfLatency)
       self._hasInitializedLatency = true
       if not wasStable and self:isStable() then
         self:_handleStabilize()
+      end
+    end,
+    _setFramesOfLatency = function(self, framesOfLatency)
+      self._framesOfLatency = framesOfLatency
+      self.game:setTemporarySyncDisableDuration(framesOfLatency + 5)
+      self.gameWithoutSmoothing:setTemporarySyncDisableDuration(framesOfLatency + 5)
+      if self.gameWithoutPrediction then
+        self.gameWithoutPrediction:setTemporarySyncDisableDuration(framesOfLatency + 5)
       end
     end,
     _handleChangeFrameOffset = function(self, offset, prevOffset)
