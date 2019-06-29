@@ -30,6 +30,7 @@ function EmptyGameClient:new()
     isEntityUsingPrediction = function(self, entity) end,
 
     -- Callback methods
+    onGameTrigger = function(self, callback) end,
     onConnect = function(self, callback) end,
     onConnectFailure = function(self, callback) end,
     onDisconnect = function(self, callback) end,

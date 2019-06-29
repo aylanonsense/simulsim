@@ -25,6 +25,7 @@ function EmptyGameServer:new(params)
     generateStateSnapshotForClient = function(self, client) end,
 
     -- Callback methods
+    onGameTrigger = function(self, callback) end,
     onConnect = function(self, callback) end
   }
 end
