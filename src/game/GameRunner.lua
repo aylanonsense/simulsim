@@ -289,6 +289,13 @@ function GameRunner:new(params)
       self.game.frame = self.game.frame + 1
       -- Get the events that take place on this frame
       local events = self:_getEventsAtFrame(self.game.frame)
+      if self.debugProperty then
+        for _, record in ipairs(self._eventHistory) do
+          if record.event.type == self.debugProperty then
+            print('Runner has ' .. record.event.type .. ' event at frame ' .. record.event.frame .. ' and it is now ' .. self.game.frame)
+          end
+        end
+      end
       -- Input-related events are automatically applied to the game's inputs
       for _, event in ipairs(events) do
         if event.isInputEvent and event.type == 'set-inputs' then
