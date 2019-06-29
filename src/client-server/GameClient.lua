@@ -201,8 +201,8 @@ function GameClient:new(params)
       self._clientFrame = self._clientFrame + 1
       self._framesSinceSetInputs = self._framesSinceSetInputs + 1
       -- Update the game (via the game runner)
-      self._runner:moveForwardOneFrame(dt)
       self._runnerWithoutSmoothing:moveForwardOneFrame(dt)
+      self._runner:moveForwardOneFrame(dt)
       if self._runnerWithoutPrediction then
         self._runnerWithoutPrediction:moveForwardOneFrame(dt)
       end
