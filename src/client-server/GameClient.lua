@@ -150,25 +150,27 @@ function GameClient:new(params)
       event.clientMetadata.applyImmediatelyWhenEarly = applyImmediatelyWhenEarly
       local predictClientSide = params.predictClientSide == nil and self:isEventUsingPrediction(event, true) or params.predictClientSide
       local clientEvent, serverEvent
-      -- Apply a prediction of the event
-      if predictClientSide then
-        clientEvent = tableUtils.cloneTable(event)
-        clientEvent.frame = frame + 1
-        self._runnerWithoutSmoothing:applyEvent(clientEvent, {
-          framesUntilAutoUnapply = self._framesOfLatency + 5,
-          preserveFrame = true
-        })
-        self._runner:applyEvent(clientEvent, {
-          preserveFrame = true
-        })
-      end
-      -- Send the event to the server
-      if sendToServer and self._messageClient:isConnected() then
-        serverEvent = tableUtils.cloneTable(event)
-        if self._runnerWithoutPrediction then
-          self._runnerWithoutPrediction:applyEvent(serverEvent, {
-            framesUntilAutoUnapply = self._framesOfLatency + 5
+      if self._messageClient:isConnected() then
+        -- Apply a prediction of the event
+        if predictClientSide then
+          clientEvent = tableUtils.cloneTable(event)
+          clientEvent.frame = frame + 1
+          self._runnerWithoutSmoothing:applyEvent(clientEvent, {
+            framesUntilAutoUnapply = self._framesOfLatency + 5,
+            preserveFrame = true
           })
+          self._runner:applyEvent(clientEvent, {
+            preserveFrame = true
+          })
+        end
+        -- Send the event to the server
+        if sendToServer then
+          serverEvent = tableUtils.cloneTable(event)
+          if self._runnerWithoutPrediction then
+            self._runnerWithoutPrediction:applyEvent(serverEvent, {
+              framesUntilAutoUnapply = self._framesOfLatency + 5
+            })
+          end
         end
         self:_buffer(constants.EVENT, event)
       end
