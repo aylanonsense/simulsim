@@ -131,49 +131,49 @@ function GameClient:new(params)
           eventId = 'anonymous-client-' .. stringUtils.generateRandomString(10)
         end
       end
+      local frame = params.frame or self.gameWithoutSmoothing.frame
       local isInputEvent = params.isInputEvent
       local maxFramesLate = params.maxFramesLate or 0
       local maxFramesEarly = params.maxFramesEarly or 20
       local sendToServer = params.sendToServer ~= false
       local applyImmediatelyWhenEarly = params.applyImmediatelyWhenEarly == true
-      if self._messageClient:isConnected() then
-        -- Create a new event
-        local event = self:_addClientMetadata({
-          id = eventId,
-          frame = self.gameWithoutSmoothing.frame + self._framesOfLatency + 1,
-          type = eventType,
-          data = eventData,
-          isInputEvent = isInputEvent
+      -- Create a new event
+      local event = self:_addClientMetadata({
+        id = eventId,
+        frame = frame + self._framesOfLatency + 1,
+        type = eventType,
+        data = eventData,
+        isInputEvent = isInputEvent
+      })
+      event.clientMetadata.maxFramesLate = maxFramesLate
+      event.clientMetadata.maxFramesEarly = maxFramesEarly
+      event.clientMetadata.applyImmediatelyWhenEarly = applyImmediatelyWhenEarly
+      local predictClientSide = params.predictClientSide == nil and self:isEventUsingPrediction(event, true) or params.predictClientSide
+      local clientEvent, serverEvent
+      -- Apply a prediction of the event
+      if predictClientSide then
+        clientEvent = tableUtils.cloneTable(event)
+        clientEvent.frame = frame + 1
+        self._runnerWithoutSmoothing:applyEvent(clientEvent, {
+          framesUntilAutoUnapply = self._framesOfLatency + 5,
+          preserveFrame = true
         })
-        event.clientMetadata.maxFramesLate = maxFramesLate
-        event.clientMetadata.maxFramesEarly = maxFramesEarly
-        event.clientMetadata.applyImmediatelyWhenEarly = applyImmediatelyWhenEarly
-        local predictClientSide = params.predictClientSide == nil and self:isEventUsingPrediction(event, true) or params.predictClientSide
-        -- Apply a prediction of the event
-        if predictClientSide then
-          local serverEvent = tableUtils.cloneTable(event)
-          if self._runnerWithoutPrediction then
-            self._runnerWithoutPrediction:applyEvent(serverEvent, {
-              framesUntilAutoUnapply = self._framesOfLatency + 5
-            })
-          end
-          local clientEvent = tableUtils.cloneTable(event)
-          clientEvent.frame = self.gameWithoutSmoothing.frame + 1
-          self._runnerWithoutSmoothing:applyEvent(clientEvent, {
-            framesUntilAutoUnapply = self._framesOfLatency + 5,
-            preserveFrame = true
-          })
-          self._runner:applyEvent(clientEvent, {
-            preserveFrame = true
-          })
-        end
-        -- Send the event to the server
-        if sendToServer then
-          self:_buffer(constants.EVENT, event)
-        end
-        -- Return the event
-        return event
+        self._runner:applyEvent(clientEvent, {
+          preserveFrame = true
+        })
       end
+      -- Send the event to the server
+      if sendToServer and self._messageClient:isConnected() then
+        serverEvent = tableUtils.cloneTable(event)
+        if self._runnerWithoutPrediction then
+          self._runnerWithoutPrediction:applyEvent(serverEvent, {
+            framesUntilAutoUnapply = self._framesOfLatency + 5
+          })
+        end
+        self:_buffer(constants.EVENT, event)
+      end
+      -- Return the event
+      return clientEvent, serverEvent
     end,
     setInputs = function(self, inputs, params)
       params = params or {}
