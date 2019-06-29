@@ -46,9 +46,6 @@ function GameRunner:new(params)
       return true
     end,
     applyEvent = function(self, event, params)
-      if self.debugProperty and event.type ~= 'set-inputs' then
-        print('Running is applying ' .. event.type .. ' event at frame ' .. event.frame .. ' and it is now ' .. self.game.frame)
-      end
       params = params or {}
       local preserveFrame = params.preserveFrame
       local preservedFrameAdjustment = params.preservedFrameAdjustment or 0
@@ -59,9 +56,6 @@ function GameRunner:new(params)
         maxAllowedAge = framesUntilAutoUnapply
       end
       if event.frame < self.game.frame - maxAllowedAge then
-        if self.debugProperty and event.type ~= 'set-inputs'  then
-          print(' DENIED - maxAgeAllowed')
-        end
         return false
       -- If the event takes place in the past, regenerate the state history
       else
@@ -82,9 +76,6 @@ function GameRunner:new(params)
               frameToRegenerateFrom = self._eventHistory[i].event.frame
             end
             if not self._allowTimeManipulation and frameToRegenerateFrom <= self.game.frame then
-              if self.debugProperty  and event.type ~= 'set-inputs' then
-                print(' DENIED - time manip')
-              end
               return false
             else
               if self._eventHistory[i].preserveFrame then
@@ -108,28 +99,16 @@ function GameRunner:new(params)
             else
               self._frameToSettleFrom = frameToRegenerateFrom
             end
-            if self.debugProperty  and event.type ~= 'set-inputs' then
-              print(' WORKED - yay')
-            end
             return true
           else
-            if self.debugProperty  and event.type ~= 'set-inputs' then
-              print(' DENIED - newp')
-            end
             return false
           end
         else
           if not replacedEvent then
             table.insert(self._eventHistory, record)
           end
-          if self.debugProperty  and event.type ~= 'set-inputs' then
-            print(' WORKED - replaced')
-          end
           return true
         end
-      end
-      if self.debugProperty  and event.type ~= 'set-inputs' then
-        print(' DENIED - nothin')
       end
     end,
     -- Cancels an event that was applied prior
@@ -310,13 +289,6 @@ function GameRunner:new(params)
       self.game.frame = self.game.frame + 1
       -- Get the events that take place on this frame
       local events = self:_getEventsAtFrame(self.game.frame)
-      if self.debugProperty then
-        for _, record in ipairs(self._eventHistory) do
-          if record.event.type ~= 'set-inputs' then
-            print('Runner has ' .. record.event.type .. ' event at frame ' .. record.event.frame .. ' and it is now ' .. self.game.frame)
-          end
-        end
-      end
       -- Input-related events are automatically applied to the game's inputs
       for _, event in ipairs(events) do
         if event.isInputEvent and event.type == 'set-inputs' then
