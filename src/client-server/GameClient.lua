@@ -126,6 +126,7 @@ function GameClient:new(params)
       local isInputEvent = params.isInputEvent
       local maxFramesLate = params.maxFramesLate or 0
       local maxFramesEarly = params.maxFramesEarly or 20
+      local sendToServer = params.sendToServer ~= false
       local applyImmediatelyWhenEarly = params.applyImmediatelyWhenEarly == true
       if self._messageClient:isConnected() then
         -- Create a new event
@@ -159,7 +160,9 @@ function GameClient:new(params)
           })
         end
         -- Send the event to the server
-        self:_buffer(constants.EVENT, event)
+        if sendToServer then
+          self:_buffer(constants.EVENT, event)
+        end
         -- Return the event
         return event
       end
