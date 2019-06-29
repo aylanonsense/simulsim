@@ -123,33 +123,38 @@ function GameClient:new(params)
     end,
     fireEvent = function(self, eventType, eventData, params)
       params = params or {}
+      local eventId = params.eventId
+      if not eventId then
+        if self.clientId then
+          eventId = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10)
+        else
+          eventId = 'anonymous-client-' .. stringUtils.generateRandomString(10)
+        end
+      end
+      local frame = params.frame or self.gameWithoutSmoothing.frame
       local isInputEvent = params.isInputEvent
       local maxFramesLate = params.maxFramesLate or 0
       local maxFramesEarly = params.maxFramesEarly or 20
+      local sendToServer = params.sendToServer ~= false
       local applyImmediatelyWhenEarly = params.applyImmediatelyWhenEarly == true
+      -- Create a new event
+      local event = self:_addClientMetadata({
+        id = eventId,
+        frame = frame + self._framesOfLatency + 1,
+        type = eventType,
+        data = eventData,
+        isInputEvent = isInputEvent
+      })
+      event.clientMetadata.maxFramesLate = maxFramesLate
+      event.clientMetadata.maxFramesEarly = maxFramesEarly
+      event.clientMetadata.applyImmediatelyWhenEarly = applyImmediatelyWhenEarly
+      local predictClientSide = params.predictClientSide == nil and self:isEventUsingPrediction(event, true) or params.predictClientSide
+      local clientEvent, serverEvent
       if self._messageClient:isConnected() then
-        -- Create a new event
-        local event = self:_addClientMetadata({
-          id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
-          frame = self.gameWithoutSmoothing.frame + self._framesOfLatency + 1,
-          type = eventType,
-          data = eventData,
-          isInputEvent = isInputEvent
-        })
-        event.clientMetadata.maxFramesLate = maxFramesLate
-        event.clientMetadata.maxFramesEarly = maxFramesEarly
-        event.clientMetadata.applyImmediatelyWhenEarly = applyImmediatelyWhenEarly
-        local predictClientSide = params.predictClientSide == nil and self:isEventUsingPrediction(event, true) or params.predictClientSide
         -- Apply a prediction of the event
         if predictClientSide then
-          local serverEvent = tableUtils.cloneTable(event)
-          if self._runnerWithoutPrediction then
-            self._runnerWithoutPrediction:applyEvent(serverEvent, {
-              framesUntilAutoUnapply = self._framesOfLatency + 5
-            })
-          end
-          local clientEvent = tableUtils.cloneTable(event)
-          clientEvent.frame = self.gameWithoutSmoothing.frame + 1
+          clientEvent = tableUtils.cloneTable(event)
+          clientEvent.frame = frame + 1
           self._runnerWithoutSmoothing:applyEvent(clientEvent, {
             framesUntilAutoUnapply = self._framesOfLatency + 5,
             preserveFrame = true
@@ -159,10 +164,18 @@ function GameClient:new(params)
           })
         end
         -- Send the event to the server
-        self:_buffer(constants.EVENT, event)
-        -- Return the event
-        return event
+        if sendToServer then
+          serverEvent = tableUtils.cloneTable(event)
+          if self._runnerWithoutPrediction then
+            self._runnerWithoutPrediction:applyEvent(serverEvent, {
+              framesUntilAutoUnapply = self._framesOfLatency + 5
+            })
+          end
+          self:_buffer(constants.EVENT, serverEvent)
+        end
       end
+      -- Return the event
+      return clientEvent, serverEvent
     end,
     setInputs = function(self, inputs, params)
       params = params or {}
@@ -188,8 +201,8 @@ function GameClient:new(params)
       self._clientFrame = self._clientFrame + 1
       self._framesSinceSetInputs = self._framesSinceSetInputs + 1
       -- Update the game (via the game runner)
-      self._runner:moveForwardOneFrame(dt)
       self._runnerWithoutSmoothing:moveForwardOneFrame(dt)
+      self._runner:moveForwardOneFrame(dt)
       if self._runnerWithoutPrediction then
         self._runnerWithoutPrediction:moveForwardOneFrame(dt)
       end

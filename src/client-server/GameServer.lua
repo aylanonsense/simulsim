@@ -158,9 +158,11 @@ function GameServer:new(params)
     end,
     -- Fires an event for the game and lets all clients know
     fireEvent = function(self, eventType, eventData, params)
+      params = params or {}
+      local eventId = params.eventId or ('server-' .. stringUtils.generateRandomString(10))
       -- Create an event
       local event = self:_addServerMetadata({
-        id = 'server-' .. stringUtils.generateRandomString(10),
+        id = eventId,
         frame = self.game.frame + 1,
         type = eventType,
         data = eventData
