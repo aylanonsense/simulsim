@@ -171,8 +171,8 @@ function GameClient:new(params)
               framesUntilAutoUnapply = self._framesOfLatency + 5
             })
           end
+          self:_buffer(constants.EVENT, serverEvent)
         end
-        self:_buffer(constants.EVENT, event)
       end
       -- Return the event
       return clientEvent, serverEvent
