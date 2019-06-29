@@ -123,6 +123,14 @@ function GameClient:new(params)
     end,
     fireEvent = function(self, eventType, eventData, params)
       params = params or {}
+      local eventId = params.eventId
+      if not eventId then
+        if self.clientId then
+          eventId = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10)
+        else
+          eventId = 'anonymous-client-' .. stringUtils.generateRandomString(10)
+        end
+      end
       local isInputEvent = params.isInputEvent
       local maxFramesLate = params.maxFramesLate or 0
       local maxFramesEarly = params.maxFramesEarly or 20
@@ -131,7 +139,7 @@ function GameClient:new(params)
       if self._messageClient:isConnected() then
         -- Create a new event
         local event = self:_addClientMetadata({
-          id = 'client-' .. self.clientId .. '-' .. stringUtils.generateRandomString(10),
+          id = eventId,
           frame = self.gameWithoutSmoothing.frame + self._framesOfLatency + 1,
           type = eventType,
           data = eventData,
