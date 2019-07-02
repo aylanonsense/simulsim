@@ -102,7 +102,7 @@ function GameServer:new(params)
   local gameDefinition = params.gameDefinition
   local framesBetweenFlushes = params.framesBetweenFlushes or 2
   local framesBetweenSnapshots = params.framesBetweenSnapshots or 46
-  local maxClientEventFramesLate = params.maxClientEventFramesLate or 0
+  local maxClientEventFramesLate = params.maxClientEventFramesLate or 3
   local maxClientEventFramesEarly = params.maxClientEventFramesEarly or 45
   local sendEventRejections = params.sendEventRejections ~= false
 
