@@ -62,6 +62,9 @@ function GameClient:new(params)
   -- Wrap the raw connection in a message client to make it easier to work with
   local messageClient = MessageClient:new({ conn = conn })
 
+  -- Get user info
+  local user = castle.user.getMe()
+
   local client = {
     -- Private vars
     _runner = runner,
@@ -98,12 +101,24 @@ function GameClient:new(params)
     clientId = nil,
     data = {},
     game = game,
+    user = user,
     gameWithoutSmoothing = gameWithoutSmoothing,
     gameWithoutPrediction = gameWithoutPrediction,
 
     -- Public methods
-    connect = function(self, handshake)
+    connect = function(self, connectData)
       logger.info('Client connecting to server')
+      local handshake = {
+        connectData = connectData
+      }
+      if self.user then
+        handshake.user = {
+          userId = self.user.userId,
+          username = self.user.username,
+          name = self.user.name,
+          photoUrl = self.user.photoUrl
+        }
+      end
       self._messageClient:connect(handshake)
     end,
     disconnect = function(self, reason)

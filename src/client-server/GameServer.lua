@@ -16,6 +16,7 @@ function ServerSideGameClient:new(params)
   local connId = params.connId
   local framesBetweenFlushes = params.framesBetweenFlushes
   local framesBetweenSnapshots = params.framesBetweenSnapshots
+  local user = params.user
 
   return {
     -- Private vars
@@ -31,6 +32,7 @@ function ServerSideGameClient:new(params)
     -- Public vars
     clientId = clientId,
     data = {},
+    user = user,
 
     -- Public methods
     -- Disconnect a client that's connected to the server
@@ -237,6 +239,7 @@ function GameServer:new(params)
         server = self,
         clientId = clientId,
         connId = connId,
+        user = handshake.user,
         framesBetweenFlushes = self._framesBetweenFlushes,
         framesBetweenSnapshots = self._framesBetweenSnapshots
       })
@@ -259,7 +262,7 @@ function GameServer:new(params)
         logger.info('Server rejected connection from client ' .. clientId .. ': ' .. (reason or 'No reason given') .. ' [frame=' .. self.game.frame .. ']')
         reject(reason)
       end
-      self:handleConnectRequest(client, handshake, accept2, reject2)
+      self:handleConnectRequest(client, handshake.connectData, accept2, reject2)
     end,
     _handleDisconnect = function(self, connId, reason)
       local client = self:_getClientByConnId(connId)
