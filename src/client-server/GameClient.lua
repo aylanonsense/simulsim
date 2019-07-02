@@ -114,7 +114,7 @@ function GameClient:new(params)
       if self.user then
         handshake.user = {
           userId = self.user.userId,
-          username = self.user.username
+          username = self.user.username,
           name = self.user.name,
           photoUrl = self.user.photoUrl
         }
