@@ -80,7 +80,7 @@ local function bindClientToAPI(client, api)
     local originalMethod = client[methodName]
     client[methodName] = function(...)
       if api[methodName] then
-        return api[methodName](..., originalMethod)
+        return api[methodName](...)
       else
         return originalMethod(...)
       end
