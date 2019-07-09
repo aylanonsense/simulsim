@@ -24,6 +24,8 @@ local function createInMemoryNetwork(gameDefinition, params)
   local cullRedundantEvents = params.cullRedundantEvents
   local sendEventRejections = params.sendEventRejections
   local checkForNilEntities = params.checkForNilEntities
+  local maxClientEventFramesLate = params.maxClientEventFramesLate
+  local maxClientEventFramesEarly = params.maxClientEventFramesEarly
 
   -- Keep track of transport streams
   local transportStreams = {}
@@ -35,7 +37,9 @@ local function createInMemoryNetwork(gameDefinition, params)
     listener = listener,
     framesBetweenFlushes = framesBetweenFlushes,
     framesBetweenSnapshots = framesBetweenServerSnapshots,
-    sendEventRejections = sendEventRejections
+    sendEventRejections = sendEventRejections,
+    maxClientEventFramesLate = maxClientEventFramesLate,
+    maxClientEventFramesEarly = maxClientEventFramesEarly
   })
 
   -- Create the clients
@@ -126,6 +130,8 @@ local function createLocalhostShareNetwork(gameDefinition, params)
   local cullRedundantEvents = params.cullRedundantEvents
   local sendEventRejections = params.sendEventRejections
   local checkForNilEntities = params.checkForNilEntities
+  local maxClientEventFramesLate = params.maxClientEventFramesLate
+  local maxClientEventFramesEarly = params.maxClientEventFramesEarly
 
   -- Create the server
   local server = GameServer:new({
@@ -136,7 +142,9 @@ local function createLocalhostShareNetwork(gameDefinition, params)
     }),
     framesBetweenFlushes = framesBetweenFlushes,
     framesBetweenSnapshots = framesBetweenServerSnapshots,
-    sendEventRejections = sendEventRejections
+    sendEventRejections = sendEventRejections,
+    maxClientEventFramesLate = maxClientEventFramesLate,
+    maxClientEventFramesEarly = maxClientEventFramesEarly
   })
 
   -- Create the client
@@ -187,6 +195,8 @@ local function createServerSideShareNetwork(gameDefinition, params)
   local cullRedundantEvents = params.cullRedundantEvents
   local sendEventRejections = params.sendEventRejections
   local checkForNilEntities = params.checkForNilEntities
+  local maxClientEventFramesLate = params.maxClientEventFramesLate
+  local maxClientEventFramesEarly = params.maxClientEventFramesEarly
 
   -- Create the server
   local server = GameServer:new({
@@ -196,7 +206,9 @@ local function createServerSideShareNetwork(gameDefinition, params)
     }),
     framesBetweenFlushes = framesBetweenFlushes,
     framesBetweenSnapshots = framesBetweenServerSnapshots,
-    sendEventRejections = sendEventRejections
+    sendEventRejections = sendEventRejections,
+    maxClientEventFramesLate = maxClientEventFramesLate,
+    maxClientEventFramesEarly = maxClientEventFramesEarly
   })
 
   -- Create a fake client
@@ -234,6 +246,8 @@ local function createClientSideShareNetwork(gameDefinition, params)
   local cullRedundantEvents = params.cullRedundantEvents
   local sendEventRejections = params.sendEventRejections
   local checkForNilEntities = params.checkForNilEntities
+  local maxClientEventFramesLate = params.maxClientEventFramesLate
+  local maxClientEventFramesEarly = params.maxClientEventFramesEarly
 
   -- Create a fake server
   local server = EmptyGameServer:new()
